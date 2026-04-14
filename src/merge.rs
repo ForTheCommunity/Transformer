@@ -6,6 +6,8 @@ use std::{
 
 use anyhow::{Result, anyhow};
 
+use crate::{preety_print, progress_bar};
+
 pub fn merge(piece_path: &str, output: &str) -> Result<()> {
     let piece_path = Path::new(piece_path);
 
@@ -21,17 +23,19 @@ pub fn merge(piece_path: &str, output: &str) -> Result<()> {
         .nth(0)
         .ok_or_else(|| anyhow!("Unable to extract filename from piece name !!!"))?;
 
-    println!("ORIG FN -> {}", orignal_filename);
+    preety_print!("Orignal File", orignal_filename);
 
     // path of folder where pieces are located.
     let pieces_dir = read_dir(piece_path.parent().unwrap())?;
 
     let mut pieces_list: Vec<PathBuf> = Vec::new();
+    let mut total_size = 0usize;
 
     for entry in pieces_dir {
         let entry = entry?;
         let file_name = entry.file_name().into_string().map_err(|e| anyhow!("Filename(OsString) contains invalid UTF-8 & cannot be converted to str. Error -> {:?}",e))?;
         if file_name.contains(orignal_filename) {
+            total_size += entry.metadata()?.len() as usize;
             pieces_list.push(entry.path());
         }
     }
@@ -43,12 +47,18 @@ pub fn merge(piece_path: &str, output: &str) -> Result<()> {
     let output_file = File::create(Path::new(output).join(orignal_filename))?;
     let mut writer = BufWriter::new(output_file);
 
+    let mut bytes_merged = 0usize;
+
     for a_piece in pieces_list {
         let piece_file = File::open(a_piece)?;
+        let piece_size = piece_file.metadata()?.len() as usize;
         let mut reader = BufReader::new(piece_file);
 
         copy(&mut reader, &mut writer)?;
-    }
 
+        bytes_merged += piece_size;
+        progress_bar(bytes_merged, total_size);
+    }
+    println!("\n  ✦ File Merged...");
     Ok(())
 }

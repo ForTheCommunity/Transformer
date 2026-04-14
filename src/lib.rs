@@ -1,3 +1,5 @@
+use std::io::{Write, stdout};
+
 use anyhow::{Result, anyhow};
 
 pub mod cli;
@@ -27,4 +29,33 @@ pub fn parse_to_bytes(piece_size: &str) -> Result<usize> {
     };
 
     Ok(number * multiplier)
+}
+
+pub fn progress_bar(current: usize, total: usize) {
+    let bar_width = 50;
+    let progress = (current as f32 / total as f32).min(1.0);
+    let filled_len = (progress * bar_width as f32) as usize;
+    let empty_len = bar_width - filled_len;
+
+    let filled_char = "█".repeat(filled_len);
+    let empty_char = "░".repeat(empty_len);
+
+    print!(
+        "\r     \x1b[32m\x1b[1m• Progress : [{}{}] \x1b[0m {:.1}%",
+        filled_char,
+        empty_char,
+        progress * 1_00.0
+    );
+    // flushing std output
+    let _ = stdout().flush();
+}
+
+#[macro_export]
+macro_rules! preety_print {
+    ($label:expr,$value:expr) => {
+        println!(
+            "  \x1b[34m\x1b[1m• {:<25} \x1b[0m : \x1b[1m{}\x1b[0m",
+            $label, $value
+        );
+    };
 }

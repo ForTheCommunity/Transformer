@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{Result, anyhow};
 
-use crate::parse_to_bytes;
+use crate::{parse_to_bytes, preety_print, progress_bar};
 
 pub fn split_file(file_path: &str, piece_size: &str, output: &str) -> Result<()> {
     let piece_size = parse_to_bytes(piece_size)?;
@@ -22,8 +22,8 @@ pub fn split_file(file_path: &str, piece_size: &str, output: &str) -> Result<()>
 
     let file_size = file.metadata()?.len() as usize;
 
-    println!("  -> File Size in Bytes -> {}", file_size);
-    println!("  -> Piece Size in Bytes -> {}", piece_size);
+    preety_print!("File Size in Bytes", file_size);
+    preety_print!("Piece Size in Bytes", piece_size);
 
     // check if piece_size is greator than file size or not.
     if piece_size > file_size {
@@ -36,20 +36,22 @@ pub fn split_file(file_path: &str, piece_size: &str, output: &str) -> Result<()>
 
     // estimating total pieces
     let total_pieces = (file_size + piece_size - 1) / piece_size;
-    println!("  -> Total Estimated Pieces : {}", total_pieces);
+    preety_print!("Total Estimated Pieces", total_pieces);
     // width for saving pieces name in lexographical order.
     let width = total_pieces.to_string().len();
 
     let mut reader = BufReader::new(file);
 
     // Buffer
-    let buffer_size = parse_to_bytes("1MB")?;
+    let buffer_size = parse_to_bytes("5MB")?;
     let mut buffer = vec![0; buffer_size];
 
     // piece count
     let mut piece_count: usize = 0;
     // Bytes read for current piece.
     let mut bytes_read = 0usize;
+    // Progress tracker for progress bar.
+    let mut total_bytes_processed = 0usize;
 
     // creating first piece.
     let mut writer = create_piece(file_name, output, piece_count, width)?;
@@ -67,6 +69,10 @@ pub fn split_file(file_path: &str, piece_size: &str, output: &str) -> Result<()>
         writer.write_all(&buffer[..n])?;
         bytes_read += n;
 
+        // progress bar
+        total_bytes_processed += n;
+        progress_bar(total_bytes_processed, file_size);
+
         // If this piece is filled and there are more pieces expected, create a new one.
         if bytes_read >= piece_size && (piece_count + 1) < total_pieces {
             piece_count += 1;
@@ -75,6 +81,7 @@ pub fn split_file(file_path: &str, piece_size: &str, output: &str) -> Result<()>
         }
     }
 
+    println!("\n  ✦ File Splitted...");
     Ok(())
 }
 
