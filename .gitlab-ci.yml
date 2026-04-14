@@ -1,0 +1,70 @@
+stages:
+  - build
+  - release
+
+build_binaries:
+  stage: build
+  image: archlinux:latest
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  script:
+    # Installing Essentials.
+    - pacman -Syu --noconfirm zip rustup aarch64-linux-gnu-gcc aarch64-linux-gnu-glibc musl
+    # Installing Rust.
+    - rustup install stable
+    # x86_64
+    - rustup target add x86_64-unknown-linux-gnu
+    # musl
+    - rustup target add x86_64-unknown-linux-musl
+    # ARM64
+    - rustup target add aarch64-unknown-linux-gnu
+    # Compile
+    - cargo build --target x86_64-unknown-linux-gnu --release
+    - cargo build --target x86_64-unknown-linux-musl --release
+    - cargo build --target aarch64-unknown-linux-gnu --release
+    # 4. Packaging and Checksums
+    - mkdir -p releases
+    - |
+      for TARGET in x86_64-unknown-linux-gnu x86_64-unknown-linux-musl aarch64-unknown-linux-gnu; do
+        FILENAME="transformer-${TARGET}"
+        # Copy binary to a temp location with a descriptive name
+        cp "target/${TARGET}/release/transformer" "./${FILENAME}"
+        
+        # Generate SHA256 checksum
+        sha256sum "${FILENAME}" > "${FILENAME}.sha256.txt"
+        
+        # Zip binary and its checksum together
+        zip "releases/${FILENAME}.zip" "${FILENAME}" "${FILENAME}.sha256.txt"
+        
+        # Clean up temp files
+        rm "${FILENAME}" "${FILENAME}.sha256.txt"
+      done
+
+  artifacts:
+    paths:
+      - releases
+
+
+create_release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - job: build_binaries
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  script:
+    - echo "Creating release for $CI_COMMIT_TAG"
+  release:
+    name: 'Release $CI_COMMIT_TAG'
+    description: 'Automated release for version $CI_COMMIT_TAG'
+    tag_name: '$CI_COMMIT_TAG'
+    assets:
+      links:
+        - name: 'Linux x86_64 (GNU) Zip'
+          url: "https://gitlab.com/$CI_PROJECT_PATH/-/jobs/artifacts/$CI_COMMIT_REF_NAME/raw/releases/transformer-x86_64-unknown-linux-gnu.zip?job=build_binaries"
+        - name: 'Linux x86_64 (MUSL) Zip'
+          url: "https://gitlab.com/$CI_PROJECT_PATH/-/jobs/artifacts/$CI_COMMIT_REF_NAME/raw/releases/transformer-x86_64-unknown-linux-musl.zip?job=build_binaries"
+        - name: 'Linux ARM64 (GNU) Zip'
+          url: "https://gitlab.com/$CI_PROJECT_PATH/-/jobs/artifacts/$CI_COMMIT_REF_NAME/raw/releases/transformer-aarch64-unknown-linux-gnu.zip?job=build_binaries"
+          
