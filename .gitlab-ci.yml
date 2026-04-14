@@ -9,7 +9,7 @@ build_binaries:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
   script:
     # Installing Essentials.
-    - pacman -Syu --noconfirm zip rustup aarch64-linux-gnu-gcc aarch64-linux-gnu-glibc musl
+    - pacman -Syu --noconfirm zip gcc rustup aarch64-linux-gnu-gcc aarch64-linux-gnu-glibc musl
     # Installing Rust.
     - rustup install stable
     # x86_64
@@ -67,4 +67,3 @@ create_release:
           url: "https://gitlab.com/$CI_PROJECT_PATH/-/jobs/artifacts/$CI_COMMIT_REF_NAME/raw/releases/transformer-x86_64-unknown-linux-musl.zip?job=build_binaries"
         - name: 'Linux ARM64 (GNU) Zip'
           url: "https://gitlab.com/$CI_PROJECT_PATH/-/jobs/artifacts/$CI_COMMIT_REF_NAME/raw/releases/transformer-aarch64-unknown-linux-gnu.zip?job=build_binaries"
-          
