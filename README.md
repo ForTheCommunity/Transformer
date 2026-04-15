@@ -2,8 +2,6 @@
 
 A command-line utility for splitting large files into chunks/pieces and merging them back together.
 
-> Note : Project is in Beta stage. Use it for testing purpose only.
-
 
 ## Usage
 
@@ -44,4 +42,24 @@ The `--piece-size` (`-p`) flag supports the following case-insensitive units:
 | `GB` | Gigabytes |
 | `TB` | Terabytes |
 
+## --> Download | Install :
+
+### 1. --> Install using [AppMan](https://github.com/ivan-hc/AppMan)/[AM](https://github.com/ivan-hc/AM).
+```
+appman install transformer
+```
+
+### 2. Download binaries from [releases](https://gitlab.com/ForTheCommunity/transformer/-/releases) Page.
+
+
+## Support
+If you find this project useful, consider supporting its development.
+<br>
+**Monero (XMR):**
+`83eg4LiD5PEWGu6JpU2mfQVmVdNJQfKzGAi5GUGZKBkBdWBaGxxUrifCj1WyiUEtUfLNaxQjcfHDaDtxfZhr7RboPCVvTYf`
+
+
+## License
+
+This project is licensed under the **[Unlicense](https://unlicense.org)**. You can view the full license text in the [UNLICENSE](./UNLICENSE) file.
 
