@@ -2,6 +2,7 @@ use clap::Parser;
 use transformer::{
     cli::{Cli, Commands},
     merge::merge,
+    preety_print,
     split::split_file,
 };
 
@@ -19,7 +20,7 @@ fn main() {
             match split_file(file_path, piece_size, output) {
                 Ok(_) => {}
                 Err(e) => {
-                    println!("  !!! Error : {}", e)
+                    preety_print!("Error", e);
                 }
             };
         }
@@ -27,12 +28,12 @@ fn main() {
         Some(Commands::Merge { piece, folder }) => match merge(piece, folder) {
             Ok(_) => {}
             Err(e) => {
-                println!("  !!! Error : {}", e)
+                preety_print!("Error", e);
             }
         },
 
         None => {
-            println!("Use a valid command !!!")
+            preety_print!("Error", "Use a valid command !!!");
         }
     }
 }

@@ -39,8 +39,8 @@ The `--piece-size` (`-p`) flag supports the following case-insensitive units:
 | Unit | Description |
 | :--- | :--- |
 | `B`  | Bytes |
-| `KB` | Kilobytes (1,024 Bytes) |
-| `MB` | Megabytes (1,048,576 Bytes) |
+| `KB` | Kilobytes |
+| `MB` | Megabytes |
 | `GB` | Gigabytes |
 | `TB` | Terabytes |
 
