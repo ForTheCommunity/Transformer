@@ -44,13 +44,16 @@ The `--piece-size` (`-p`) flag supports the following case-insensitive units:
 
 ## --> Download | Install :
 
-### 1. --> Install using [AppMan](https://github.com/ivan-hc/AppMan)/[AM](https://github.com/ivan-hc/AM).
+### # Download binaries from [releases](https://gitlab.com/ForTheCommunity/transformer/-/releases) Page.
+
+[![Download for Windows](https://img.shields.io/badge/download-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/ForTheCommunity/Transformer/releases)
+
+[![Download for Linux](https://img.shields.io/badge/download-Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://gitlab.com/ForTheCommunity/Transformer/-/releases)
+
+### # Install using [AppMan](https://github.com/ivan-hc/AppMan)/[AM](https://github.com/ivan-hc/AM).
 ```
 appman install transformer
 ```
-
-### 2. Download binaries from [releases](https://gitlab.com/ForTheCommunity/transformer/-/releases) Page.
-
 
 ## Support
 If you find this project useful, consider supporting its development.

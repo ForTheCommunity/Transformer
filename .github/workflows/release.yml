@@ -1,0 +1,57 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout This Repo
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+
+    
+      - name: Build for Windows
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc
+
+    
+      - name: Package Artifact
+        shell: pwsh
+        run: |
+          # Create distribution directory
+          New-Item -Path "dist" -ItemType Directory -Force
+          
+          # Copy the .exe files
+          Copy-Item "target/x86_64-pc-windows-msvc/release/*.exe" -Destination "dist/"
+          
+          # Generate SHA256 checksums for all .exe files in the dist folder
+          Get-ChildItem "dist/*.exe" | ForEach-Object {
+              $hash = Get-FileHash $_.FullName -Algorithm SHA256
+              "$($hash.Hash)  $($_.Name)" | Out-File -FilePath "dist/sha256.txt" -Append -Encoding ascii
+          }
+
+    
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/*.exe
+            dist/sha256.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
