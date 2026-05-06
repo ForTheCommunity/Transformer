@@ -2,6 +2,7 @@
 
 A command-line utility for splitting large files into chunks/pieces and merging them back together.
 
+-> Join [Matrix Room](https://matrix.to/#/#transformer:matrix.org)
 
 ## Usage
 
