@@ -4,9 +4,17 @@ A command-line utility for splitting large files into chunks/pieces and merging 
 
 -> Join [Matrix Room](https://matrix.to/#/#transformer:matrix.org)
 
+
+# File Splitting Demo :
+![transformer file splitting](https://github.com/ForTheCommunity/Assets/blob/main/transformer/transformer_split.gif?raw=true)
+
+# File Merging Demo :
+![transformer file merging](https://github.com/ForTheCommunity/Assets/blob/main/transformer/transformer_merge.gif?raw=true)
+
+
 ## Usage
 
-### Splitting a File
+## Splitting a File
 Use the `split` subcommand to break a file into smaller pieces.
 
 ```bash
@@ -18,7 +26,7 @@ transformer split --file-path <PATH> --piece-size <SIZE> --output <DIRECTORY>
 transformer split -f large_video.mp4 -p 100MB -o ./fragments
 ```
 
-### Merging Pieces
+## Merging Pieces
 Use the `merge` subcommand to reconstruct the original file from a directory of pieces.
 > Note : All Pieces should be in same folder/directory.
 
@@ -45,13 +53,13 @@ The `--piece-size` (`-p`) flag supports the following case-insensitive units:
 
 ## --> Download | Install :
 
-### # Download binaries from [releases](https://gitlab.com/ForTheCommunity/transformer/-/releases) Page.
+## # Download binaries from [releases](https://gitlab.com/ForTheCommunity/transformer/-/releases) Page.
 
 [![Download for Windows](https://img.shields.io/badge/download-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/ForTheCommunity/Transformer/releases)
 
 [![Download for Linux](https://img.shields.io/badge/download-Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://gitlab.com/ForTheCommunity/Transformer/-/releases)
 
-### # Install using [AppMan](https://github.com/ivan-hc/AppMan)/[AM](https://github.com/ivan-hc/AM).
+## # Install using [AppMan](https://github.com/ivan-hc/AppMan)/[AM](https://github.com/ivan-hc/AM).
 ```
 appman install transformer
 ```
@@ -66,4 +74,3 @@ If you find this project useful, consider supporting its development.
 ## License
 
 This project is licensed under the **[Unlicense](https://unlicense.org)**. You can view the full license text in the [UNLICENSE](./UNLICENSE) file.
-
