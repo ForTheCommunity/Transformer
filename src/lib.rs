@@ -5,6 +5,7 @@ use anyhow::{Result, anyhow};
 pub mod cli;
 pub mod merge;
 pub mod split;
+pub mod crypt;
 
 pub fn parse_to_bytes(piece_size: &str) -> Result<usize> {
     let piece_size = piece_size.trim().to_uppercase();
