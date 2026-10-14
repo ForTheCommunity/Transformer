@@ -1,6 +1,7 @@
 use clap::Parser;
 use transformer::{
     cli::{Cli, Commands},
+    crypt::{decyrpt_file, encrypt_file},
     merge::merge,
     preety_print,
     split::split_file,
@@ -31,6 +32,26 @@ fn main() {
                 preety_print!("Error", e);
             }
         },
+
+        Some(Commands::Encrypt {
+            file,
+            keystore,
+            output,
+        }) => {
+            if let Err(e) = encrypt_file(keystore, file, output) {
+                eprintln!("  {}", e)
+            }
+        }
+
+        Some(Commands::Decrypt {
+            file,
+            keystore,
+            output,
+        }) => {
+            if let Err(e) = decyrpt_file(keystore, file, output) {
+                eprintln!("  {}", e)
+            }
+        }
 
         None => {
             preety_print!("Error", "Use a valid command !!!");

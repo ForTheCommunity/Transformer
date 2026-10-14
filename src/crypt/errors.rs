@@ -3,7 +3,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum CryptError {
     #[error("{0}, Error -> {1}")]
-    Error(String, std::io::Error),
+    Error(String, String),
 
     #[error("B64 Error: {0}, Error -> {1}")]
     B64Error(String, String),

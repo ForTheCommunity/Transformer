@@ -102,14 +102,14 @@ pub fn create_keystore(path: &PathBuf, password: &str) -> Result<(), CryptError>
     })?;
 
     fs::write(path, json_data)
-        .map_err(|e| CryptError::Error("Error saving Keystore file".to_string(), e))?;
+        .map_err(|e| CryptError::Error("Error saving Keystore file".to_string(), e.to_string()))?;
 
     Ok(())
 }
 
 pub fn load_keystore_key(path: &PathBuf, password: &str) -> Result<[u8; 32], CryptError> {
     let json_data = fs::read_to_string(path)
-        .map_err(|e| CryptError::Error("Unable to load keystore file".to_string(), e))?;
+        .map_err(|e| CryptError::Error("Unable to load keystore file".to_string(), e.to_string()))?;
     let keystore = serde_json::from_str::<KeyStore>(&json_data).map_err(|e| {
         CryptError::SerdeError("Unable to Deserealize Keystore".to_string(), e.to_string())
     })?;

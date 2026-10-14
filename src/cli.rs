@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -29,5 +31,33 @@ pub enum Commands {
         /// Output Folder Path, eg. ~/Downloads
         #[arg(short = 'f', long)]
         folder: String,
+    },
+    /// Encrypt file/s
+    Encrypt {
+        /// Path of file to encrypt
+        #[arg(short = 'f', long)]
+        file: PathBuf,
+
+        /// Keystore
+        #[arg(short = 'k', long)]
+        keystore: PathBuf,
+
+        /// Output path
+        #[arg(short = 'o', long)]
+        output: PathBuf,
+    },
+    /// Decrypt file/s
+    Decrypt {
+        /// Path of encrypted file,
+        #[arg(short = 'f', long)]
+        file: PathBuf,
+
+        /// Keystore
+        #[arg(short = 'k', long)]
+        keystore: PathBuf,
+
+        /// Output path
+        #[arg(short = 'o', long)]
+        output: PathBuf,
     },
 }
