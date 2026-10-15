@@ -45,6 +45,10 @@ pub enum Commands {
         /// Output path
         #[arg(short = 'o', long)]
         output: PathBuf,
+
+        /// Chunk size in MB (1-100, default: 1)
+        #[arg(short = 'c', long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..=100))]
+        chunk_size: u32,
     },
     /// Decrypt file
     Decrypt {
@@ -69,6 +73,10 @@ pub enum Commands {
         /// Output path
         #[arg(short = 'o', long)]
         output: PathBuf,
+
+        /// Chunk size in MB (1-100, default: 1)
+        #[arg(short = 'c', long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..=100))]
+        chunk_size: u32,
     },
     /// Decrypt a self-contained password-encrypted file
     DecryptPass {

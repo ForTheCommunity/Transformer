@@ -33,8 +33,10 @@ fn main() {
             file,
             keystore,
             output,
+            chunk_size,
         }) => {
-            if let Err(e) = encrypt_file_ks(keystore, file, output) {
+            let chunk_bytes = *chunk_size as usize * 1024 * 1024;
+            if let Err(e) = encrypt_file_ks(keystore, file, output, chunk_bytes) {
                 eprintln!("  {}", e)
             }
         }
@@ -49,14 +51,15 @@ fn main() {
             }
         }
 
-        Some(Commands::EncryptPass { file, output }) => {
-            if let Err(e) = encyrpt_file_wp(file,output){
+        Some(Commands::EncryptPass { file, output, chunk_size }) => {
+            let chunk_bytes = *chunk_size as usize * 1024 * 1024;
+            if let Err(e) = encyrpt_file_wp(file, output, chunk_bytes) {
                    eprintln!("  {}", e)
             }
         }
 
         Some(Commands::DecryptPass { file, output }) => {
-            if let Err(e) = decyrpt_file_wp(file,output){
+            if let Err(e) = decyrpt_file_wp(file, output) {
                    eprintln!("  {}", e)
             }
         }
