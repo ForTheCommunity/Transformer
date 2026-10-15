@@ -1,10 +1,6 @@
 use clap::Parser;
 use transformer::{
-    cli::{Cli, Commands},
-    crypt::{decyrpt_file, encrypt_file},
-    merge::merge,
-    preety_print,
-    split::split_file,
+    cli::{Cli, Commands}, crypt::{decyrpt_file_ks, decyrpt_file_wp, encrypt_file_ks, encyrpt_file_wp}, merge::merge, preety_print, split::split_file,
 };
 
 mod cli;
@@ -38,7 +34,7 @@ fn main() {
             keystore,
             output,
         }) => {
-            if let Err(e) = encrypt_file(keystore, file, output) {
+            if let Err(e) = encrypt_file_ks(keystore, file, output) {
                 eprintln!("  {}", e)
             }
         }
@@ -48,8 +44,20 @@ fn main() {
             keystore,
             output,
         }) => {
-            if let Err(e) = decyrpt_file(keystore, file, output) {
+            if let Err(e) = decyrpt_file_ks(keystore, file, output) {
                 eprintln!("  {}", e)
+            }
+        }
+
+        Some(Commands::EncryptPass { file, output }) => {
+            if let Err(e) = encyrpt_file_wp(file,output){
+                   eprintln!("  {}", e)
+            }
+        }
+
+        Some(Commands::DecryptPass { file, output }) => {
+            if let Err(e) = decyrpt_file_wp(file,output){
+                   eprintln!("  {}", e)
             }
         }
 

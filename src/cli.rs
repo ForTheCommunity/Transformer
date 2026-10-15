@@ -32,7 +32,7 @@ pub enum Commands {
         #[arg(short = 'f', long)]
         folder: String,
     },
-    /// Encrypt file/s
+    /// Encrypt file
     Encrypt {
         /// Path of file to encrypt
         #[arg(short = 'f', long)]
@@ -46,7 +46,7 @@ pub enum Commands {
         #[arg(short = 'o', long)]
         output: PathBuf,
     },
-    /// Decrypt file/s
+    /// Decrypt file
     Decrypt {
         /// Path of encrypted file,
         #[arg(short = 'f', long)]
@@ -55,6 +55,26 @@ pub enum Commands {
         /// Keystore
         #[arg(short = 'k', long)]
         keystore: PathBuf,
+
+        /// Output path
+        #[arg(short = 'o', long)]
+        output: PathBuf,
+    },
+    /// Encrypt file directly using a password (no keystore needed; self-contained)
+    EncryptPass {
+        /// Path of file to encrypt
+        #[arg(short = 'f', long)]
+        file: PathBuf,
+
+        /// Output path
+        #[arg(short = 'o', long)]
+        output: PathBuf,
+    },
+    /// Decrypt a self-contained password-encrypted file
+    DecryptPass {
+        /// Path of encrypted file
+        #[arg(short = 'f', long)]
+        file: PathBuf,
 
         /// Output path
         #[arg(short = 'o', long)]
