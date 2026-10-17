@@ -53,7 +53,7 @@ pub fn create_ks(path: &PathBuf) -> Result<()> {
     if let Err(e) = create_keystore(&keystore_path, &password) {
         eprintln!(" Error -> {}", e.to_string());
     }
-    println!(" Generated Keystore at {:?}", keystore_path.to_str());
+    println!(" Generated Keystore at {}", keystore_path.to_str().unwrap());
     return Ok(());
 }
 
@@ -63,7 +63,7 @@ pub fn encrypt_file_ks(
     output: &PathBuf,
     chunk_size: usize,
     password: Option<String>,
-) -> Result<()> {
+) -> Result<PathBuf> {
     let mut ks_master_password: Option<String> = None;
     if password.is_none() {
         ks_master_password = Some(prompt_password("Enter New Master password: ")?);
@@ -100,11 +100,11 @@ pub fn encrypt_file_ks(
 
     println!("    Successfully encrypted '{}'", file_name);
     println!(
-        "   Saved anonymously as: '{}' (Server sees no metadata)",
+        "   Saved anonymously as: '{}'",
         output_filename
     );
 
-    return Ok(());
+    Ok(output_path)
 }
 
 pub fn decyrpt_file_ks(keystore: &PathBuf, file: &PathBuf, output: &PathBuf) -> Result<()> {
@@ -200,7 +200,7 @@ pub fn encyrpt_file_wp(
         file_name,
         &mut reader,
         &mut writer,
-        chunk_size * 1024 * 1024,
+        chunk_size,
     )?;
     drop(writer); // flush before rename
     pb.finish_with_message("done");
@@ -209,7 +209,7 @@ pub fn encyrpt_file_wp(
 
     println!("    Successfully encrypted '{}'", file_name);
     println!(
-        "   Saved anonymously as: '{}' (Server sees no metadata)",
+        "   Saved anonymously as: '{}'",
         output_filename
     );
 
