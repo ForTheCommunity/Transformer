@@ -74,6 +74,15 @@ pub enum Commands {
         #[arg(short = 'o', long)]
         output: PathBuf,
 
+        /// Password argument
+        #[arg(
+            short = 'p',
+            long,
+            help = "Password used to encrypt/decrypt file",
+            long_help = "Password [ Don't pass this argument because it will save your password in shell history. ] A secure password prompt will ask for password even if you don't use this option..."
+        )]
+        password: Option<String>,
+
         /// Chunk size in MB (1-100, default: 1)
         #[arg(short = 'c', long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..=100))]
         chunk_size: u32,
@@ -87,5 +96,11 @@ pub enum Commands {
         /// Output path
         #[arg(short = 'o', long)]
         output: PathBuf,
+    },
+    /// Create Keystore
+    CreateKeystore {
+        /// Output path for keystore
+        #[arg(short = 'o', long)]
+        file_path: PathBuf,
     },
 }

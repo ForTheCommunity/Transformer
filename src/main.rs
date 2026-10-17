@@ -1,6 +1,10 @@
 use clap::Parser;
 use transformer::{
-    cli::{Cli, Commands}, crypt::{decyrpt_file_ks, decyrpt_file_wp, encrypt_file_ks, encyrpt_file_wp}, merge::merge, preety_print, split::split_file,
+    cli::{Cli, Commands},
+    crypt::{create_ks, decyrpt_file_ks, decyrpt_file_wp, encrypt_file_ks, encyrpt_file_wp},
+    merge::merge,
+    preety_print,
+    split::split_file,
 };
 
 mod cli;
@@ -36,7 +40,7 @@ fn main() {
             chunk_size,
         }) => {
             let chunk_bytes = *chunk_size as usize * 1024 * 1024;
-            if let Err(e) = encrypt_file_ks(keystore, file, output, chunk_bytes) {
+            if let Err(e) = encrypt_file_ks(keystore, file, output, chunk_bytes, None) {
                 eprintln!("  {}", e)
             }
         }
@@ -51,16 +55,27 @@ fn main() {
             }
         }
 
-        Some(Commands::EncryptPass { file, output, chunk_size }) => {
+        Some(Commands::EncryptPass {
+            file,
+            output,
+            password,
+            chunk_size,
+        }) => {
             let chunk_bytes = *chunk_size as usize * 1024 * 1024;
-            if let Err(e) = encyrpt_file_wp(file, output, chunk_bytes) {
-                   eprintln!("  {}", e)
+            if let Err(e) = encyrpt_file_wp(file, output, password, chunk_bytes) {
+                eprintln!("  {}", e)
             }
         }
 
         Some(Commands::DecryptPass { file, output }) => {
             if let Err(e) = decyrpt_file_wp(file, output) {
-                   eprintln!("  {}", e)
+                eprintln!("  {}", e)
+            }
+        }
+
+        Some(Commands::CreateKeystore { file_path }) => {
+            if let Err(e) = create_ks(file_path) {
+                eprintln!("  {}", e)
             }
         }
 
