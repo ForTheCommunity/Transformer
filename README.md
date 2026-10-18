@@ -1,20 +1,20 @@
-# Transformer
+# 🛠 Transformer
 
 A command-line utility for splitting large files into chunks/pieces and merging them back together.
 
 -> Join [Matrix Room](https://matrix.to/#/#transformer:matrix.org)
 
 
-# File Splitting Demo :
+# ❖ File Splitting Demo :
 ![transformer file splitting](https://github.com/ForTheCommunity/Assets/blob/main/transformer/transformer_split.gif?raw=true)
 
-# File Merging Demo :
+# ❖ File Merging Demo :
 ![transformer file merging](https://github.com/ForTheCommunity/Assets/blob/main/transformer/transformer_merge.gif?raw=true)
 
 
-## Usage
+## ❖ Usage
 
-## Splitting a File
+## ✦ Splitting a File
 Use the `split` subcommand to break a file into smaller pieces.
 
 ```bash
@@ -26,7 +26,7 @@ transformer split --file-path <PATH> --piece-size <SIZE> --output <DIRECTORY>
 transformer split -f large_video.mp4 -p 100MB -o ./fragments
 ```
 
-## Merging Pieces
+## ✦ Merging Pieces
 Use the `merge` subcommand to reconstruct the original file from a directory of pieces.
 > Note : All Pieces should be in same folder/directory.
 
@@ -39,7 +39,7 @@ transformer merge --piece <Any Piece> --folder <FOLDER_PATH>
 transformer merge -p ~/Downloads/pieces/piece_000 -f ~/Downloads/
 ```
 
-## Supported Units
+## ✦ Supported Units
 
 The `--piece-size` (`-p`) flag supports the following case-insensitive units:
 
@@ -50,6 +50,73 @@ The `--piece-size` (`-p`) flag supports the following case-insensitive units:
 | `MB` | Megabytes |
 | `GB` | Gigabytes |
 | `TB` | Terabytes |
+
+
+## ❖ Encrypting/Decrypting File:
+
+## ❖ 1. En/De-crypting file with a password:
+
+## ✦ Encrypting file with a password:
+Use the `encrypt-pass` subcommand to encrypt a file with password.
+
+| Option | Long form | Description |
+|--------|-----------|-------------|
+| `-f` | `--file` | Path of file to encrypt |
+| `-o` | `--output` | Path where encrypted file will be saved |
+| `-p` | `--password` | Pass Password via argument |
+| `-c` | `--chunk-size` | Set Buffer/Chunk Size, setting higher size encrypts fast |
+| `-h` | `--help` | View details about this subcommand |
+
+
+
+⥏ **Examples:** ⥑
+```bash
+transformer encrypt-pass -f video.mp4 -o ./encrypted_files/
+```
+
+
+⥏ **give password via argument:** ⥑
+```bash
+transformer encrypt-pass -f video.mp4 -o ./encrypted_files/ -p secret_password
+```
+
+⥏ **Set Buffer/Chunk Size (MB):** ⥑
+```bash
+transformer encrypt-pass -f video.mp4 -o ./encrypted_files/ -c 100
+```
+> The default Chunk Size (Buffer) is 1 MB. When encrypting large files, increase this value (up to 100 MB) for significantly faster performance. Max Chunk Size is 100MB.
+
+> Note: For security reasons, avoid passing your password directly as a command-line argument, as it will be saved in your shell history. If you omit the argument, the tool will automatically display a secure password prompt.
+
+
+## ✦ Decrypting file with a password:
+Use the `decrypt-pass` subcommand to decrypt a file with password.
+
+| Option | Long form | Description |
+|--------|-----------|-------------|
+| `-f` | `--file` | Path of file to decrypt |
+| `-o` | `--output` | Path where decrypted file will be saved |
+| `-p` | `--password` | Pass Password via argument |
+| `-h` | `--help` | View details about this subcommand |
+
+
+⥏ **Examples:** ⥑
+```bash
+transformer decrypt-pass -f sd3gdvs6.encrypted -o ./decrypted_files/
+```
+
+
+⥏ **give password via argument:** ⥑
+```bash
+transformer decrypt-pass -f sd3gdvs6.encrypted -o ./decrypted_files/ -p secret_password
+```
+
+> Note: For security reasons, avoid passing your password directly as a command-line argument, as it will be saved in your shell history. If you omit the argument, the tool will automatically display a secure password prompt.
+
+## ❖ 2. En/De-crypting file with a Keystore:
+
+
+
 
 ## --> Download | Install :
 

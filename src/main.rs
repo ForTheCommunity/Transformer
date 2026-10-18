@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use transformer::{
     cli::{Cli, Commands},
     crypt::{create_ks, decyrpt_file_ks, decyrpt_file_wp, encrypt_file_ks, encyrpt_file_wp},
@@ -49,9 +49,9 @@ fn main() {
             file,
             keystore,
             output,
-            password
+            password,
         }) => {
-            if let Err(e) = decyrpt_file_ks(keystore, file, output,password) {
+            if let Err(e) = decyrpt_file_ks(keystore, file, output, password) {
                 eprintln!("  {}", e)
             }
         }
@@ -68,8 +68,12 @@ fn main() {
             }
         }
 
-        Some(Commands::DecryptPass { file, output ,password}) => {
-            if let Err(e) = decyrpt_file_wp(file, output,password) {
+        Some(Commands::DecryptPass {
+            file,
+            output,
+            password,
+        }) => {
+            if let Err(e) = decyrpt_file_wp(file, output, password) {
                 eprintln!("  {}", e)
             }
         }
@@ -80,8 +84,6 @@ fn main() {
             }
         }
 
-        None => {
-            preety_print!("Error", "Use a valid command !!!");
-        }
+        None => Cli::command().print_help().expect("failed to print help"),
     }
 }
