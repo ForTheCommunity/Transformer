@@ -12,7 +12,7 @@ use anyhow::{Result, anyhow};
 use indicatif::{ProgressBar, ProgressStyle};
 use rpassword::ConfigBuilder;
 
-use crate::crypt::keystore::create_keystore;
+use crate::crypt::keystore::{create_keystore, verify_ks_master_password};
 
 fn password_config() -> rpassword::Config {
     ConfigBuilder::new().password_feedback_mask('*').build()
@@ -99,17 +99,23 @@ pub fn encrypt_file_ks(
     fs::rename(&tmp_path, &output_path)?;
 
     println!("    Successfully encrypted '{}'", file_name);
-    println!(
-        "   Saved anonymously as: '{}'",
-        output_filename
-    );
+    println!("   Saved anonymously as: '{}'", output_filename);
 
     Ok(output_path)
 }
 
-pub fn decyrpt_file_ks(keystore: &PathBuf, file: &PathBuf, output: &PathBuf) -> Result<()> {
-    let password = prompt_password("Enter master password: ")?;
-    let master_key = keystore::load_keystore_key(&keystore, &password)?;
+pub fn decyrpt_file_ks(
+    keystore: &PathBuf,
+    file: &PathBuf,
+    output: &PathBuf,
+    password: &Option<String>,
+) -> Result<()> {
+    let master_password = match password {
+        Some(pwd) => pwd.to_string(),
+        None => prompt_password("    Enter master password: ")?,
+    };
+
+    let master_key = keystore::load_keystore_key(&keystore, &master_password)?;
 
     let file_size = fs::metadata(file)?.len();
     let pb = make_progress_bar(file_size, "Decrypting");
@@ -141,7 +147,7 @@ pub fn decyrpt_file_ks(keystore: &PathBuf, file: &PathBuf, output: &PathBuf) -> 
     } else {
         tmp_path
     };
-
+    fs::remove_file(file)?;
     println!(
         "   Successfully decrypted! Restored original file: '{}' \n saved at {}",
         original_filename,
@@ -208,21 +214,21 @@ pub fn encyrpt_file_wp(
     fs::rename(&tmp_path, &output_path)?;
 
     println!("    Successfully encrypted '{}'", file_name);
-    println!(
-        "   Saved anonymously as: '{}'",
-        output_filename
-    );
+    println!("   Saved anonymously as: '{}'", output_filename);
 
     Ok(output_path)
 }
 
-pub fn decyrpt_file_wp(file: &PathBuf, output: &PathBuf) -> Result<()> {
+pub fn decyrpt_file_wp(file: &PathBuf, output: &PathBuf, password: &Option<String>) -> Result<()> {
     if !file.exists() {
         eprintln!("File doesn't exists !!!!");
         return Ok(());
     }
 
-    let password = rpassword::prompt_password("Enter decryption password: ")?;
+    let final_password = match password {
+        Some(pwd) => pwd.to_owned(),
+        None => rpassword::prompt_password("Enter decryption password: ")?,
+    };
 
     let file_size = fs::metadata(file)?.len();
     let pb = make_progress_bar(file_size, "Decrypting");
@@ -236,12 +242,13 @@ pub fn decyrpt_file_wp(file: &PathBuf, output: &PathBuf) -> Result<()> {
         let tmp_path = output.join(format!("{}.dec.tmp", tmp_name));
         {
             let mut writer = BufWriter::new(File::create(&tmp_path)?);
-            let name = file_crypt::decrypt_file_with_pwd(&password, &mut reader, &mut writer)?;
+            let name =
+                file_crypt::decrypt_file_with_pwd(&final_password, &mut reader, &mut writer)?;
             (tmp_path, name)
         }
     } else {
         let mut writer = BufWriter::new(File::create(output)?);
-        let name = file_crypt::decrypt_file_with_pwd(&password, &mut reader, &mut writer)?;
+        let name = file_crypt::decrypt_file_with_pwd(&final_password, &mut reader, &mut writer)?;
         (output.clone(), name)
     };
     pb.finish_with_message("done");
@@ -261,4 +268,12 @@ pub fn decyrpt_file_wp(file: &PathBuf, output: &PathBuf) -> Result<()> {
     );
 
     Ok(())
+}
+
+/// Verifies provided Master Password against provided Keystore.
+pub fn check_master_password(path: &PathBuf, password: &str) -> Result<bool,String> {
+    match verify_ks_master_password(path, password){
+        Ok(result) => Ok(result),
+        Err(e) => Err(e.to_string())
+    }
 }

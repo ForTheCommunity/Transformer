@@ -108,8 +108,9 @@ pub fn create_keystore(path: &PathBuf, password: &str) -> Result<(), CryptError>
 }
 
 pub fn load_keystore_key(path: &PathBuf, password: &str) -> Result<[u8; 32], CryptError> {
-    let json_data = fs::read_to_string(path)
-        .map_err(|e| CryptError::Error("Unable to load keystore file".to_string(), e.to_string()))?;
+    let json_data = fs::read_to_string(path).map_err(|e| {
+        CryptError::Error("Unable to load keystore file".to_string(), e.to_string())
+    })?;
     let keystore = serde_json::from_str::<KeyStore>(&json_data).map_err(|e| {
         CryptError::SerdeError("Unable to Deserealize Keystore".to_string(), e.to_string())
     })?;
@@ -144,4 +145,16 @@ pub fn load_keystore_key(path: &PathBuf, password: &str) -> Result<[u8; 32], Cry
     master_key.copy_from_slice(&master_key_vec);
 
     Ok(master_key)
+}
+
+/// Checks if provided master password is valid for a keystore or not.
+/// verifies provided master password against provided Keystore.
+pub fn verify_ks_master_password(ks_path: &PathBuf, password: &str) -> Result<bool, CryptError> {
+    match load_keystore_key(ks_path, password) {
+        Ok(_) => Ok(true),
+        // If decryption fails due to wrong password or any other AES-GCM related issues...
+        Err(CryptError::AesGcmError(_, _)) => Ok(false),
+        // other errors
+        Err(e) => Err(e),
+    }
 }

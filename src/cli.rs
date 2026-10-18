@@ -63,6 +63,9 @@ pub enum Commands {
         /// Output path
         #[arg(short = 'o', long)]
         output: PathBuf,
+
+        /// Password of keystore
+        password:Option<String>
     },
     /// Encrypt file directly using a password (no keystore needed; self-contained)
     EncryptPass {
@@ -96,6 +99,9 @@ pub enum Commands {
         /// Output path
         #[arg(short = 'o', long)]
         output: PathBuf,
+
+        /// Password for decrypting file
+        password: Option<String>,
     },
     /// Create Keystore
     CreateKeystore {

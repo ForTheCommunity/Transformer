@@ -49,8 +49,9 @@ fn main() {
             file,
             keystore,
             output,
+            password
         }) => {
-            if let Err(e) = decyrpt_file_ks(keystore, file, output) {
+            if let Err(e) = decyrpt_file_ks(keystore, file, output,password) {
                 eprintln!("  {}", e)
             }
         }
@@ -67,8 +68,8 @@ fn main() {
             }
         }
 
-        Some(Commands::DecryptPass { file, output }) => {
-            if let Err(e) = decyrpt_file_wp(file, output) {
+        Some(Commands::DecryptPass { file, output ,password}) => {
+            if let Err(e) = decyrpt_file_wp(file, output,password) {
                 eprintln!("  {}", e)
             }
         }
