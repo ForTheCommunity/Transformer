@@ -4,79 +4,46 @@ pub mod keystore;
 
 use std::{
     fs::{self, File},
-    io::{BufReader, BufWriter},
+    io::{BufReader, BufWriter, Read},
     path::PathBuf,
 };
 
 use anyhow::{Result, anyhow};
-use indicatif::{ProgressBar, ProgressStyle};
-use rpassword::ConfigBuilder;
 
-use crate::crypt::keystore::{create_keystore, verify_ks_master_password};
+use crate::crypt::keystore::verify_ks_master_password;
 
-fn password_config() -> rpassword::Config {
-    ConfigBuilder::new().password_feedback_mask('*').build()
+struct CallbackReader<R, F> {
+    inner: R,
+    callback: F,
 }
 
-pub fn prompt_password(prompt: &str) -> Result<String> {
-    let config = password_config();
-    Ok(rpassword::prompt_password_with_config(prompt, config)?)
-}
-
-// Create a styled progress bar for file operations.
-fn make_progress_bar(total_bytes: u64, action: &str) -> ProgressBar {
-    let pb = ProgressBar::new(total_bytes);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template(&format!(
-                "  {{spinner:.cyan}} {action} [{{bar:40.cyan/dim}}] {{bytes}}/{{total_bytes}} ({{eta}})"
-            ))
-            .expect("invalid progress bar template")
-            .progress_chars("━╸─"),
-    );
-    pb
-}
-
-pub fn create_ks(path: &PathBuf) -> Result<()> {
-    let mut keystore_path = PathBuf::new();
-    if path.is_dir() {
-        keystore_path = path.join("keystore.json")
+impl<R: Read, F: FnMut(u64)> Read for CallbackReader<R, F> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        if n > 0 {
+            (self.callback)(n as u64);
+        }
+        Ok(n)
     }
-
-    let password = prompt_password("    Enter New Master password: ")?;
-    let confirm_password = prompt_password("    Confirm Password: ")?;
-
-    if password != confirm_password {
-        return Err(anyhow!(" Password didn't matched !!!"));
-    }
-
-    if let Err(e) = create_keystore(&keystore_path, &password) {
-        eprintln!(" Error -> {}", e.to_string());
-    }
-    println!(" Generated Keystore at {}", keystore_path.to_str().unwrap());
-    return Ok(());
 }
 
-pub fn encrypt_file_ks(
+pub fn encrypt_file_ks<F>(
     keystore: &PathBuf,
     file: &PathBuf,
     output: &PathBuf,
     chunk_size: usize,
-    password: Option<String>,
-) -> Result<PathBuf> {
-    let mut ks_master_password: Option<String> = None;
-    if password.is_none() {
-        ks_master_password = Some(prompt_password("Enter New Master password: ")?);
-    } else if password.is_some() {
-        ks_master_password = password
-    }
-
+    ks_master_password: String,
+    mut on_progress: F, // Progress Callback
+) -> Result<PathBuf>
+where
+    F: FnMut(u64),
+{
     let file_name = file
         .file_name()
         .ok_or_else(|| anyhow!("Invalid file name"))?
         .to_str()
         .ok_or_else(|| anyhow!("Filename is not valid UTF-8"))?;
-    let master_key = keystore::load_keystore_key(&keystore, &ks_master_password.unwrap())?;
+    let master_key = keystore::load_keystore_key(&keystore, &ks_master_password)?;
 
     // Generate a random anonymous filename (e.g., "7f3b9a1c.enc") to prevent metadata leakage
     let mut random_bytes = [0u8; 8];
@@ -87,39 +54,39 @@ pub fn encrypt_file_ks(
     let output_path = output.join(&output_filename);
     let tmp_path = output.join(&tmp_filename);
 
-    let file_size = fs::metadata(file)?.len();
-    let pb = make_progress_bar(file_size, "Encrypting");
-    let mut reader = pb.wrap_read(BufReader::new(File::open(file)?));
+    let file_handle = File::open(file)?;
+    let mut reader = CallbackReader {
+        inner: BufReader::new(file_handle),
+        callback: &mut on_progress,
+    };
+
     let mut writer = BufWriter::new(File::create(&tmp_path)?);
 
     file_crypt::encrypt_file_wks(&master_key, file_name, &mut reader, &mut writer, chunk_size)?;
     drop(writer); // flush before rename
-    pb.finish_with_message("done");
 
     fs::rename(&tmp_path, &output_path)?;
-
-    println!("    Successfully encrypted '{}'", file_name);
-    println!("   Saved anonymously as: '{}'", output_filename);
 
     Ok(output_path)
 }
 
-pub fn decyrpt_file_ks(
+pub fn decyrpt_file_ks<F>(
     keystore: &PathBuf,
     file: &PathBuf,
     output: &PathBuf,
-    password: &Option<String>,
-) -> Result<()> {
-    let master_password = match password {
-        Some(pwd) => pwd.to_string(),
-        None => prompt_password("    Enter master password: ")?,
+    ks_master_password: String,
+    mut on_progress: F,
+) -> Result<PathBuf>
+where
+    F: FnMut(u64),
+{
+    let master_key = keystore::load_keystore_key(&keystore, &ks_master_password)?;
+
+    let file_handle = File::open(file)?;
+    let mut reader = CallbackReader {
+        inner: BufReader::new(file_handle),
+        callback: &mut on_progress,
     };
-
-    let master_key = keystore::load_keystore_key(&keystore, &master_password)?;
-
-    let file_size = fs::metadata(file)?.len();
-    let pb = make_progress_bar(file_size, "Decrypting");
-    let mut reader = pb.wrap_read(BufReader::new(File::open(file)?));
 
     // The original filename is only known after decryption. If `output` is a
     // directory we decrypt to a temp file first and then rename it.
@@ -138,7 +105,6 @@ pub fn decyrpt_file_ks(
         let name = file_crypt::decrypt_file_wks(&master_key, &mut reader, &mut writer)?;
         (output.clone(), name)
     };
-    pb.finish_with_message("done");
 
     let output_path = if output.is_dir() {
         let dest = output.join(&original_filename);
@@ -148,44 +114,25 @@ pub fn decyrpt_file_ks(
         tmp_path
     };
     fs::remove_file(file)?;
-    println!(
-        "   Successfully decrypted! Restored original file: '{}' \n saved at {}",
-        original_filename,
-        output_path.to_str().unwrap()
-    );
 
-    Ok(())
+    Ok(PathBuf::from(output_path.to_str().unwrap()).join(original_filename))
 }
 
-pub fn encyrpt_file_wp(
+pub fn encyrpt_file_wp<F>(
     file: &PathBuf,
     output: &PathBuf,
-    password: &Option<String>,
+    password: String,
     chunk_size: usize,
-) -> Result<PathBuf> {
-    if !file.exists() {
-        eprintln!("File doesn't exists !!!!");
-        return Err(anyhow!("File doesn't exists !!!!"));
-    }
-
+    mut on_progress: F,
+) -> Result<PathBuf>
+where
+    F: FnMut(u64),
+{
     let file_name = file
         .file_name()
         .ok_or_else(|| anyhow!("Invalid file name"))?
         .to_str()
         .ok_or_else(|| anyhow!("Filename is not valid UTF-8"))?;
-
-    let final_password = match password {
-        Some(password) => password.to_owned(),
-        None => {
-            let input_pwd = prompt_password("Enter New Master password: ")?;
-            let confirm_pwd = rpassword::prompt_password("Confirm encryption password: ")?;
-            if input_pwd != confirm_pwd {
-                eprintln!("❌ Error: Passwords do not match!");
-                std::process::exit(1);
-            }
-            input_pwd
-        }
-    };
 
     // Generate a random anonymous filename (e.g., "7f3b9a1c.enc") to prevent metadata leakage
     let mut random_bytes = [0u8; 8];
@@ -196,43 +143,36 @@ pub fn encyrpt_file_wp(
     let output_path = output.join(&output_filename);
     let tmp_path = output.join(&tmp_filename);
 
-    let file_size = fs::metadata(file)?.len();
-    let pb = make_progress_bar(file_size, "Encrypting");
-    let mut reader = pb.wrap_read(BufReader::new(File::open(file)?));
+    let file_handle = File::open(file)?;
+    let mut reader = CallbackReader {
+        inner: BufReader::new(file_handle),
+        callback: &mut on_progress,
+    };
+
     let mut writer = BufWriter::new(File::create(&tmp_path)?);
 
-    file_crypt::encrypt_file_with_pwd(
-        &final_password,
-        file_name,
-        &mut reader,
-        &mut writer,
-        chunk_size,
-    )?;
+    file_crypt::encrypt_file_with_pwd(&password, file_name, &mut reader, &mut writer, chunk_size)?;
     drop(writer); // flush before rename
-    pb.finish_with_message("done");
 
     fs::rename(&tmp_path, &output_path)?;
-
-    println!("    Successfully encrypted '{}'", file_name);
-    println!("   Saved anonymously as: '{}'", output_filename);
 
     Ok(output_path)
 }
 
-pub fn decyrpt_file_wp(file: &PathBuf, output: &PathBuf, password: &Option<String>) -> Result<()> {
-    if !file.exists() {
-        eprintln!("File doesn't exists !!!!");
-        return Ok(());
-    }
-
-    let final_password = match password {
-        Some(pwd) => pwd.to_owned(),
-        None => rpassword::prompt_password("Enter decryption password: ")?,
+pub fn decyrpt_file_wp<F>(
+    file: &PathBuf,
+    output: &PathBuf,
+    password: String,
+    mut on_progress: F,
+) -> Result<PathBuf>
+where
+    F: FnMut(u64),
+{
+    let file_handle = File::open(file)?;
+    let mut reader = CallbackReader {
+        inner: BufReader::new(file_handle),
+        callback: &mut on_progress,
     };
-
-    let file_size = fs::metadata(file)?.len();
-    let pb = make_progress_bar(file_size, "Decrypting");
-    let mut reader = pb.wrap_read(BufReader::new(File::open(file)?));
 
     // Same temp-file trick as in decyrpt_file_ks
     let (tmp_path, original_filename) = if output.is_dir() {
@@ -242,16 +182,14 @@ pub fn decyrpt_file_wp(file: &PathBuf, output: &PathBuf, password: &Option<Strin
         let tmp_path = output.join(format!("{}.dec.tmp", tmp_name));
         {
             let mut writer = BufWriter::new(File::create(&tmp_path)?);
-            let name =
-                file_crypt::decrypt_file_with_pwd(&final_password, &mut reader, &mut writer)?;
+            let name = file_crypt::decrypt_file_with_pwd(&password, &mut reader, &mut writer)?;
             (tmp_path, name)
         }
     } else {
         let mut writer = BufWriter::new(File::create(output)?);
-        let name = file_crypt::decrypt_file_with_pwd(&final_password, &mut reader, &mut writer)?;
+        let name = file_crypt::decrypt_file_with_pwd(&password, &mut reader, &mut writer)?;
         (output.clone(), name)
     };
-    pb.finish_with_message("done");
 
     let output_path = if output.is_dir() {
         let dest = output.join(&original_filename);
@@ -261,19 +199,13 @@ pub fn decyrpt_file_wp(file: &PathBuf, output: &PathBuf, password: &Option<Strin
         tmp_path
     };
 
-    println!(
-        "   Successfully decrypted! Restored original file: '{}' \n saved at {}",
-        original_filename,
-        output_path.to_str().unwrap()
-    );
-
-    Ok(())
+    Ok(output_path)
 }
 
 /// Verifies provided Master Password against provided Keystore.
-pub fn check_master_password(path: &PathBuf, password: &str) -> Result<bool,String> {
-    match verify_ks_master_password(path, password){
+pub fn check_master_password(path: &PathBuf, password: &str) -> Result<bool, String> {
+    match verify_ks_master_password(path, password) {
         Ok(result) => Ok(result),
-        Err(e) => Err(e.to_string())
+        Err(e) => Err(e.to_string()),
     }
 }

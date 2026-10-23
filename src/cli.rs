@@ -65,7 +65,7 @@ pub enum Commands {
         output: PathBuf,
 
         /// Password of keystore
-        password:Option<String>
+        password: Option<String>,
     },
     /// Encrypt file directly using a password (no keystore needed; self-contained)
     EncryptPass {

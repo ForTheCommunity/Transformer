@@ -1,12 +1,16 @@
 use clap::{CommandFactory, Parser};
 use transformer::{
     cli::{Cli, Commands},
-    crypt::{create_ks, decyrpt_file_ks, decyrpt_file_wp, encrypt_file_ks, encyrpt_file_wp},
     merge::merge,
     preety_print,
     split::split_file,
 };
 
+use crate::bin_helper::{
+    create_ks, dfwkp_bin_helper, dfwks_bin_helper, efwkp_bin_helper, efwks_bin_helper,
+};
+
+mod bin_helper;
 mod cli;
 
 fn main() {
@@ -40,7 +44,7 @@ fn main() {
             chunk_size,
         }) => {
             let chunk_bytes = *chunk_size as usize * 1024 * 1024;
-            if let Err(e) = encrypt_file_ks(keystore, file, output, chunk_bytes, None) {
+            if let Err(e) = efwks_bin_helper(keystore, file, output, chunk_bytes, None) {
                 eprintln!("  {}", e)
             }
         }
@@ -51,7 +55,7 @@ fn main() {
             output,
             password,
         }) => {
-            if let Err(e) = decyrpt_file_ks(keystore, file, output, password) {
+            if let Err(e) = dfwks_bin_helper(keystore, file, output, password) {
                 eprintln!("  {}", e)
             }
         }
@@ -63,7 +67,7 @@ fn main() {
             chunk_size,
         }) => {
             let chunk_bytes = *chunk_size as usize * 1024 * 1024;
-            if let Err(e) = encyrpt_file_wp(file, output, password, chunk_bytes) {
+            if let Err(e) = efwkp_bin_helper(file, output, password, chunk_bytes) {
                 eprintln!("  {}", e)
             }
         }
@@ -73,7 +77,7 @@ fn main() {
             output,
             password,
         }) => {
-            if let Err(e) = decyrpt_file_wp(file, output, password) {
+            if let Err(e) = dfwkp_bin_helper(file, output, password) {
                 eprintln!("  {}", e)
             }
         }
