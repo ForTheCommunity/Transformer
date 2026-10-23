@@ -49,6 +49,10 @@ pub enum Commands {
         /// Chunk size in MB (1-100, default: 1)
         #[arg(short = 'c', long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..=100))]
         chunk_size: u32,
+
+        /// Delete Orignal file after encrypting
+        #[arg(short = 'd', long)]
+        delete: bool,
     },
     /// Decrypt file
     Decrypt {
@@ -66,6 +70,10 @@ pub enum Commands {
 
         /// Password of keystore
         password: Option<String>,
+
+        /// Delete Encrypted file after decrypting
+        #[arg(short = 'd', long)]
+        delete: bool,
     },
     /// Encrypt file directly using a password (no keystore needed; self-contained)
     EncryptPass {
@@ -89,7 +97,12 @@ pub enum Commands {
         /// Chunk size in MB (1-100, default: 1)
         #[arg(short = 'c', long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..=100))]
         chunk_size: u32,
+
+        /// Delete Orignal file after encrypting
+        #[arg(short = 'd', long)]
+        delete: bool,
     },
+
     /// Decrypt a self-contained password-encrypted file
     DecryptPass {
         /// Path of encrypted file
@@ -102,6 +115,10 @@ pub enum Commands {
 
         /// Password for decrypting file
         password: Option<String>,
+
+        /// Delete Encrypted file after decrypting
+        #[arg(short = 'd', long)]
+        delete: bool,
     },
     /// Create Keystore
     CreateKeystore {

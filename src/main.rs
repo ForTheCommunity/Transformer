@@ -42,9 +42,10 @@ fn main() {
             keystore,
             output,
             chunk_size,
+            delete,
         }) => {
             let chunk_bytes = *chunk_size as usize * 1024 * 1024;
-            if let Err(e) = efwks_bin_helper(keystore, file, output, chunk_bytes, None) {
+            if let Err(e) = efwks_bin_helper(keystore, file, output, chunk_bytes, None, *delete) {
                 eprintln!("  {}", e)
             }
         }
@@ -54,8 +55,9 @@ fn main() {
             keystore,
             output,
             password,
+            delete,
         }) => {
-            if let Err(e) = dfwks_bin_helper(keystore, file, output, password) {
+            if let Err(e) = dfwks_bin_helper(keystore, file, output, password, *delete) {
                 eprintln!("  {}", e)
             }
         }
@@ -65,9 +67,10 @@ fn main() {
             output,
             password,
             chunk_size,
+            delete
         }) => {
             let chunk_bytes = *chunk_size as usize * 1024 * 1024;
-            if let Err(e) = efwkp_bin_helper(file, output, password, chunk_bytes) {
+            if let Err(e) = efwkp_bin_helper(file, output, password, chunk_bytes,*delete) {
                 eprintln!("  {}", e)
             }
         }
@@ -76,8 +79,9 @@ fn main() {
             file,
             output,
             password,
+            delete
         }) => {
-            if let Err(e) = dfwkp_bin_helper(file, output, password) {
+            if let Err(e) = dfwkp_bin_helper(file, output, password,*delete) {
                 eprintln!("  {}", e)
             }
         }

@@ -33,6 +33,7 @@ pub fn encrypt_file_ks<F>(
     output: &PathBuf,
     chunk_size: usize,
     ks_master_password: String,
+    delete: bool,
     mut on_progress: F, // Progress Callback
 ) -> Result<PathBuf>
 where
@@ -65,7 +66,9 @@ where
     file_crypt::encrypt_file_wks(&master_key, file_name, &mut reader, &mut writer, chunk_size)?;
     drop(writer); // flush before rename
 
-    fs::rename(&tmp_path, &output_path)?;
+    if delete {
+        fs::rename(&tmp_path, &output_path)?;
+    }
 
     Ok(output_path)
 }
@@ -75,6 +78,7 @@ pub fn decyrpt_file_ks<F>(
     file: &PathBuf,
     output: &PathBuf,
     ks_master_password: String,
+    delete: bool,
     mut on_progress: F,
 ) -> Result<PathBuf>
 where
@@ -113,7 +117,10 @@ where
     } else {
         tmp_path
     };
-    fs::remove_file(file)?;
+
+    if delete {
+        fs::remove_file(file)?;
+    }
 
     Ok(PathBuf::from(output_path.to_str().unwrap()).join(original_filename))
 }
@@ -123,6 +130,7 @@ pub fn encyrpt_file_wp<F>(
     output: &PathBuf,
     password: String,
     chunk_size: usize,
+    delete: bool,
     mut on_progress: F,
 ) -> Result<PathBuf>
 where
@@ -156,6 +164,10 @@ where
 
     fs::rename(&tmp_path, &output_path)?;
 
+    if delete {
+        fs::remove_file(file)?;
+    }
+
     Ok(output_path)
 }
 
@@ -163,6 +175,7 @@ pub fn decyrpt_file_wp<F>(
     file: &PathBuf,
     output: &PathBuf,
     password: String,
+    delete: bool,
     mut on_progress: F,
 ) -> Result<PathBuf>
 where
@@ -198,6 +211,10 @@ where
     } else {
         tmp_path
     };
+
+    if delete {
+        fs::remove_file(file)?;
+    }
 
     Ok(output_path)
 }

@@ -57,6 +57,7 @@ pub fn efwks_bin_helper(
     output: &PathBuf,
     chunk_size: usize,
     password: Option<String>,
+    delete:bool
 ) -> Result<PathBuf> {
     let mut ks_master_password = String::new();
     if password.is_none() {
@@ -79,6 +80,7 @@ pub fn efwks_bin_helper(
         &output_path,
         chunk_size,
         ks_master_password,
+        delete,
         move |bytes_read| {
             // This closure fires on every chunk read, updating the progress bar smoothly
             pb_clone.inc(bytes_read);
@@ -96,6 +98,7 @@ pub fn dfwks_bin_helper(
     file: &PathBuf,
     output: &PathBuf,
     password: &Option<String>,
+    delete:bool
 ) -> Result<PathBuf> {
     let master_password = match password {
         Some(pwd) => pwd.to_string(),
@@ -111,6 +114,7 @@ pub fn dfwks_bin_helper(
         &file,
         &output,
         master_password,
+        delete,
         move |bytes_read| {
             pb_clone.inc(bytes_read);
         },
@@ -133,6 +137,7 @@ pub fn efwkp_bin_helper(
     output: &PathBuf,
     password: &Option<String>,
     chunk_size: usize,
+    delete:bool
 ) -> Result<()> {
     if !file.exists() {
         return Err(anyhow!("File doesn't exists !!!!"));
@@ -160,6 +165,7 @@ pub fn efwkp_bin_helper(
         output,
         final_password,
         chunk_size,
+        delete,
         move |bytes_read| {
             pb_clone.inc(bytes_read);
         },
@@ -177,7 +183,7 @@ pub fn efwkp_bin_helper(
 }
 
 // decrypt file with password bin helper.
-pub fn dfwkp_bin_helper(file: &PathBuf, output: &PathBuf, password: &Option<String>) -> Result<()> {
+pub fn dfwkp_bin_helper(file: &PathBuf, output: &PathBuf, password: &Option<String>,delete:bool) -> Result<()> {
     if !file.exists() {
         return Err(anyhow!("File doesn't exists !!!!"));
     }
@@ -191,7 +197,7 @@ pub fn dfwkp_bin_helper(file: &PathBuf, output: &PathBuf, password: &Option<Stri
     let pb = make_progress_bar(file_size, "Decrypting");
     let pb_clone = pb.clone();
 
-    let output = decyrpt_file_wp(file, output, final_password, move |bytes_read| {
+    let output = decyrpt_file_wp(file, output, final_password,delete, move |bytes_read| {
         pb_clone.inc(bytes_read);
     })?;
 
