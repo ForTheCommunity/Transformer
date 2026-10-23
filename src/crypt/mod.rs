@@ -66,8 +66,10 @@ where
     file_crypt::encrypt_file_wks(&master_key, file_name, &mut reader, &mut writer, chunk_size)?;
     drop(writer); // flush before rename
 
+    fs::rename(&tmp_path, &output_path)?;
+
     if delete {
-        fs::rename(&tmp_path, &output_path)?;
+        fs::remove_file(file)?;
     }
 
     Ok(output_path)

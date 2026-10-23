@@ -22,7 +22,7 @@ pub fn make_progress_bar(total_bytes: u64, action: &str) -> ProgressBar {
     pb.set_style(
         ProgressStyle::default_bar()
             .template(&format!(
-                "  {{spinner:.cyan}} {action} [{{bar:40.cyan/dim}}] {{bytes}}/{{total_bytes}} ({{eta}})"
+                "  {{spinner:.cyan}} {action} [{{bar:40.cyan/dim}}] {{bytes}}/{{total_bytes}} (ETA: {{eta}})"
             ))
             .expect("invalid progress bar template")
             .progress_chars("━╸─"),
@@ -57,11 +57,11 @@ pub fn efwks_bin_helper(
     output: &PathBuf,
     chunk_size: usize,
     password: Option<String>,
-    delete:bool
+    delete: bool,
 ) -> Result<PathBuf> {
     let mut ks_master_password = String::new();
     if password.is_none() {
-        ks_master_password = prompt_password("Enter Your Master password: ")?;
+        ks_master_password = prompt_password("    Enter Your Master password: ")?;
     } else if password.is_some() {
         ks_master_password = password.unwrap()
     }
@@ -87,7 +87,15 @@ pub fn efwks_bin_helper(
         },
     )?;
 
-    pb.finish_with_message("done");
+    pb.finish_and_clear();
+
+    let msg = format!(
+        "   ✓  Encrypted File {} -> {}",
+        encrypted_file_path.file_name().unwrap().to_str().unwrap(),
+        file.file_name().unwrap().to_str().unwrap(),
+    );
+
+    println!("{}", msg);
 
     Ok(encrypted_file_path)
 }
@@ -98,7 +106,7 @@ pub fn dfwks_bin_helper(
     file: &PathBuf,
     output: &PathBuf,
     password: &Option<String>,
-    delete:bool
+    delete: bool,
 ) -> Result<PathBuf> {
     let master_password = match password {
         Some(pwd) => pwd.to_string(),
@@ -120,13 +128,15 @@ pub fn dfwks_bin_helper(
         },
     )?;
 
+    pb.finish_and_clear();
+
     let msg = format!(
-        "   Successfully decrypted! Restored original file: '{}' from {}",
+        "   ✓  Successfully decrypted! Restored original file: '{}' from {}",
         result.file_name().unwrap().to_str().unwrap(),
         file.file_name().unwrap().to_str().unwrap(),
     );
 
-    pb.finish_with_message(msg);
+    println!("{}", msg);
 
     Ok(result)
 }
@@ -137,7 +147,7 @@ pub fn efwkp_bin_helper(
     output: &PathBuf,
     password: &Option<String>,
     chunk_size: usize,
-    delete:bool
+    delete: bool,
 ) -> Result<()> {
     if !file.exists() {
         return Err(anyhow!("File doesn't exists !!!!"));
@@ -146,10 +156,10 @@ pub fn efwkp_bin_helper(
     let final_password = match password {
         Some(password) => password.to_owned(),
         None => {
-            let input_pwd = prompt_password("Enter New Master password: ")?;
-            let confirm_pwd = rpassword::prompt_password("Confirm encryption password: ")?;
+            let input_pwd = prompt_password("Enter a password to encrypt file: ")?;
+            let confirm_pwd = prompt_password("Confirm encryption password: ")?;
             if input_pwd != confirm_pwd {
-                eprintln!("❌ Error: Passwords do not match!");
+                eprintln!("   ❌ Error: Passwords do not match!");
                 std::process::exit(1);
             }
             input_pwd
@@ -171,19 +181,26 @@ pub fn efwkp_bin_helper(
         },
     )?;
 
+    pb.finish_and_clear();
+
     let msg = format!(
-        "Encrypted file {} -> {}",
+        "   ✓  Encrypted file {} -> {}",
         file.file_name().unwrap().to_str().unwrap(),
         output.file_name().unwrap().to_str().unwrap()
     );
 
-    pb.finish_with_message(msg);
+    println!("{msg}");
 
     Ok(())
 }
 
 // decrypt file with password bin helper.
-pub fn dfwkp_bin_helper(file: &PathBuf, output: &PathBuf, password: &Option<String>,delete:bool) -> Result<()> {
+pub fn dfwkp_bin_helper(
+    file: &PathBuf,
+    output: &PathBuf,
+    password: &Option<String>,
+    delete: bool,
+) -> Result<()> {
     if !file.exists() {
         return Err(anyhow!("File doesn't exists !!!!"));
     }
@@ -197,16 +214,19 @@ pub fn dfwkp_bin_helper(file: &PathBuf, output: &PathBuf, password: &Option<Stri
     let pb = make_progress_bar(file_size, "Decrypting");
     let pb_clone = pb.clone();
 
-    let output = decyrpt_file_wp(file, output, final_password,delete, move |bytes_read| {
+    let output = decyrpt_file_wp(file, output, final_password, delete, move |bytes_read| {
         pb_clone.inc(bytes_read);
     })?;
 
+    pb.finish_and_clear();
+
     let msg = format!(
-        "Decrypted: {}, Restored orignal file: {}",
+        "   ✓ Decrypted: {}, Restored orignal file: {}",
         file.file_name().unwrap().to_str().unwrap(),
         output.file_name().unwrap().to_str().unwrap()
     );
-    pb.finish_with_message(msg);
+
+    println!("{msg}");
 
     Ok(())
 }
