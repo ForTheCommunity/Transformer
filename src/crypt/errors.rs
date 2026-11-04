@@ -20,3 +20,9 @@ pub enum CryptError {
     #[error("Invalid Header: {0}")]
     InvalidHeader(String),
 }
+
+impl From<std::io::Error> for CryptError {
+    fn from(e: std::io::Error) -> Self {
+        CryptError::Error("I/O error".to_string(), e.to_string())
+    }
+}

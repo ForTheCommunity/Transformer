@@ -20,7 +20,7 @@ pub fn merge(piece_path: &str, output: &str) -> Result<()> {
     // <FILE_NAME>_piece_<PIECE_INDEX>
     let orignal_filename = file_name
         .split("_piece_")
-        .nth(0)
+        .next()
         .ok_or_else(|| anyhow!("Unable to extract filename from piece name !!!"))?;
 
     preety_print!("Orignal File", orignal_filename);

@@ -1,10 +1,14 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
-use anyhow::{Ok, Result, anyhow};
+use anyhow::{Result, anyhow};
 use indicatif::{ProgressBar, ProgressStyle};
 use rpassword::ConfigBuilder;
 use transformer::crypt::{
-    decyrpt_file_ks, decyrpt_file_wp, encrypt_file_ks, encyrpt_file_wp, keystore::create_keystore,
+    decrypt_file_ks, decrypt_file_wp, encrypt_file_ks, encrypt_file_wp, keystore::create_keystore,
+    zeroize::Zeroize,
 };
 
 fn password_config() -> rpassword::Config {
@@ -30,59 +34,56 @@ pub fn make_progress_bar(total_bytes: u64, action: &str) -> ProgressBar {
     pb
 }
 
-pub fn create_ks(path: &PathBuf) -> Result<()> {
+pub fn create_ks(path: &Path) -> Result<()> {
     let mut keystore_path = PathBuf::new();
     if path.is_dir() {
         keystore_path = path.join("keystore.json")
     }
 
-    let password = prompt_password("    Enter New Master password: ")?;
-    let confirm_password = prompt_password("    Confirm Password: ")?;
+    let mut password = prompt_password("    Enter New Master password: ")?;
+    let mut confirm_password = prompt_password("    Confirm Password: ")?;
 
     if password != confirm_password {
-        return Err(anyhow!(" Password didn't matched !!!"));
+        password.zeroize();
+        confirm_password.zeroize();
+        return Err(anyhow!(" Password didn't match !!!"));
     }
+    confirm_password.zeroize();
 
     if let Err(e) = create_keystore(&keystore_path, &password) {
-        eprintln!(" Error -> {}", e.to_string());
+        eprintln!(" Error -> {e}");
     }
+    password.zeroize();
     println!(" Generated Keystore at {}", keystore_path.to_str().unwrap());
-    return Ok(());
+    Ok(())
 }
 
-// encrypt file with keystore bin helper.
+// Encrypt file with keystore bin helper.
 pub fn efwks_bin_helper(
-    keystore: &PathBuf,
-    file: &PathBuf,
-    output: &PathBuf,
+    keystore: &Path,
+    file: &Path,
+    output: &Path,
     chunk_size: usize,
     password: Option<String>,
     delete: bool,
 ) -> Result<PathBuf> {
-    let mut ks_master_password = String::new();
-    if password.is_none() {
-        ks_master_password = prompt_password("    Enter Your Master password: ")?;
-    } else if password.is_some() {
-        ks_master_password = password.unwrap()
-    }
+    let ks_master_password = match password {
+        Some(pwd) => pwd,
+        None => prompt_password("    Enter Your Master password: ")?,
+    };
 
-    // proggress bar
-    let file_size = fs::metadata(&file)?.len();
+    let file_size = fs::metadata(file)?.len();
     let pb = make_progress_bar(file_size, "Encrypting");
     let pb_clone = pb.clone();
 
-    let keystore_path = keystore.clone();
-    let file_path = file.clone();
-    let output_path = output.clone();
     let encrypted_file_path = encrypt_file_ks(
-        &keystore_path,
-        &file_path,
-        &output_path,
+        keystore,
+        file,
+        output,
         chunk_size,
         ks_master_password,
         delete,
         move |bytes_read| {
-            // This closure fires on every chunk read, updating the progress bar smoothly
             pb_clone.inc(bytes_read);
         },
     )?;
@@ -95,16 +96,16 @@ pub fn efwks_bin_helper(
         file.file_name().unwrap().to_str().unwrap(),
     );
 
-    println!("{}", msg);
+    println!("{msg}");
 
     Ok(encrypted_file_path)
 }
 
-// decrypt file with keystore bin helper.
+// Decrypt file with keystore bin helper.
 pub fn dfwks_bin_helper(
-    keystore: &PathBuf,
-    file: &PathBuf,
-    output: &PathBuf,
+    keystore: &Path,
+    file: &Path,
+    output: &Path,
     password: &Option<String>,
     delete: bool,
 ) -> Result<PathBuf> {
@@ -113,14 +114,14 @@ pub fn dfwks_bin_helper(
         None => prompt_password("    Enter master password: ")?,
     };
 
-    let file_size = fs::metadata(&file)?.len();
+    let file_size = fs::metadata(file)?.len();
     let pb = make_progress_bar(file_size, "Decrypting");
     let pb_clone = pb.clone();
 
-    let result = decyrpt_file_ks(
-        &keystore,
-        &file,
-        &output,
+    let result = decrypt_file_ks(
+        keystore,
+        file,
+        output,
         master_password,
         delete,
         move |bytes_read| {
@@ -136,41 +137,44 @@ pub fn dfwks_bin_helper(
         file.file_name().unwrap().to_str().unwrap(),
     );
 
-    println!("{}", msg);
+    println!("{msg}");
 
     Ok(result)
 }
 
-// encrypt file with password bin helper.
+// Encrypt file with password bin helper.
 pub fn efwkp_bin_helper(
-    file: &PathBuf,
-    output: &PathBuf,
+    file: &Path,
+    output: &Path,
     password: &Option<String>,
     chunk_size: usize,
     delete: bool,
 ) -> Result<()> {
     if !file.exists() {
-        return Err(anyhow!("File doesn't exists !!!!"));
+        return Err(anyhow!("File doesn't exist !!!!"));
     }
 
     let final_password = match password {
-        Some(password) => password.to_owned(),
+        Some(pwd) => pwd.to_owned(),
         None => {
-            let input_pwd = prompt_password("Enter a password to encrypt file: ")?;
-            let confirm_pwd = prompt_password("Confirm encryption password: ")?;
+            let mut input_pwd = prompt_password("Enter a password to encrypt file: ")?;
+            let mut confirm_pwd = prompt_password("Confirm encryption password: ")?;
             if input_pwd != confirm_pwd {
+                input_pwd.zeroize();
+                confirm_pwd.zeroize();
                 eprintln!("   ❌ Error: Passwords do not match!");
                 std::process::exit(1);
             }
+            confirm_pwd.zeroize();
             input_pwd
         }
     };
 
-    let file_size = fs::metadata(&file)?.len();
+    let file_size = fs::metadata(file)?.len();
     let pb = make_progress_bar(file_size, "Encrypting");
     let pb_clone = pb.clone();
 
-    let output = encyrpt_file_wp(
+    let output_res = encrypt_file_wp(
         file,
         output,
         final_password,
@@ -186,7 +190,7 @@ pub fn efwkp_bin_helper(
     let msg = format!(
         "   ✓  Encrypted file {} -> {}",
         file.file_name().unwrap().to_str().unwrap(),
-        output.file_name().unwrap().to_str().unwrap()
+        output_res.file_name().unwrap().to_str().unwrap()
     );
 
     println!("{msg}");
@@ -194,15 +198,15 @@ pub fn efwkp_bin_helper(
     Ok(())
 }
 
-// decrypt file with password bin helper.
+// Decrypt file with password bin helper.
 pub fn dfwkp_bin_helper(
-    file: &PathBuf,
-    output: &PathBuf,
+    file: &Path,
+    output: &Path,
     password: &Option<String>,
     delete: bool,
 ) -> Result<()> {
     if !file.exists() {
-        return Err(anyhow!("File doesn't exists !!!!"));
+        return Err(anyhow!("File doesn't exist !!!!"));
     }
 
     let final_password = match password {
@@ -210,20 +214,20 @@ pub fn dfwkp_bin_helper(
         None => rpassword::prompt_password("Enter decryption password: ")?,
     };
 
-    let file_size = fs::metadata(&file)?.len();
+    let file_size = fs::metadata(file)?.len();
     let pb = make_progress_bar(file_size, "Decrypting");
     let pb_clone = pb.clone();
 
-    let output = decyrpt_file_wp(file, output, final_password, delete, move |bytes_read| {
+    let output_res = decrypt_file_wp(file, output, final_password, delete, move |bytes_read| {
         pb_clone.inc(bytes_read);
     })?;
 
     pb.finish_and_clear();
 
     let msg = format!(
-        "   ✓ Decrypted: {}, Restored orignal file: {}",
+        "   ✓ Decrypted: {}, Restored original file: {}",
         file.file_name().unwrap().to_str().unwrap(),
-        output.file_name().unwrap().to_str().unwrap()
+        output_res.file_name().unwrap().to_str().unwrap()
     );
 
     println!("{msg}");

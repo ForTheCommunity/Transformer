@@ -35,7 +35,7 @@ pub fn split_file(file_path: &str, piece_size: &str, output: &str) -> Result<()>
     }
 
     // estimating total pieces
-    let total_pieces = (file_size + piece_size - 1) / piece_size;
+    let total_pieces = file_size.div_ceil(piece_size);
     preety_print!("Total Estimated Pieces", total_pieces);
     // width for saving pieces name in lexographical order.
     let width = total_pieces.to_string().len();
