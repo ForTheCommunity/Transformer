@@ -5,6 +5,134 @@ use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 
 use crate::crypt::errors::CryptError;
 
+// Header Constants & Types
+pub const MAGIC_BYTES: &[u8; 4] = b"TFMR";
+pub const CURRENT_FORMAT_VERSION: u8 = 1;
+
+const TOOL_VERSION_MAJOR: u8 = match u8::from_str_radix(env!("CARGO_PKG_VERSION_MAJOR"), 10) {
+    Ok(v) => v,
+    Err(_) => 0,
+};
+const TOOL_VERSION_MINOR: u8 = match u8::from_str_radix(env!("CARGO_PKG_VERSION_MINOR"), 10) {
+    Ok(v) => v,
+    Err(_) => 0,
+};
+const TOOL_VERSION_PATCH: u8 = match u8::from_str_radix(env!("CARGO_PKG_VERSION_PATCH"), 10) {
+    Ok(v) => v,
+    Err(_) => 0,
+};
+pub const CURRENT_TOOL_VERSION: [u8; 3] = [
+    TOOL_VERSION_MAJOR,
+    TOOL_VERSION_MINOR,
+    TOOL_VERSION_PATCH,
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum EncryptionMode {
+    Keystore = 1,
+    Password = 2,
+}
+
+impl EncryptionMode {
+    pub fn from_u8(val: u8) -> Option<Self> {
+        match val {
+            1 => Some(EncryptionMode::Keystore),
+            2 => Some(EncryptionMode::Password),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CipherSuite {
+    Aes256Gcm = 1,
+}
+
+impl CipherSuite {
+    pub fn from_u8(val: u8) -> Option<Self> {
+        match val {
+            1 => Some(CipherSuite::Aes256Gcm),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileHeader {
+    pub format_version: u8,
+    pub mode: EncryptionMode,
+    pub cipher_suite: CipherSuite,
+    pub tool_version: [u8; 3],
+}
+
+// Write the common header bytes into the writer.
+//
+// Header layout (10 B total):
+//   Magic Bytes    (4 B) : b"TFMR"
+//   Format Version (1 B) : 0x01
+//   Mode           (1 B) : 0x01 (Keystore) or 0x02 (Password)
+//   Cipher Suite   (1 B) : 0x01 (AES-256-GCM)
+//   Tool Version   (3 B) : [major, minor, patch]
+pub fn write_header(
+    writer: &mut impl Write,
+    mode: EncryptionMode,
+    cipher_suite: CipherSuite,
+) -> Result<(), CryptError> {
+    writer.write_all(MAGIC_BYTES).map_err(io_err)?;
+    writer.write_all(&[CURRENT_FORMAT_VERSION]).map_err(io_err)?;
+    writer.write_all(&[mode as u8]).map_err(io_err)?;
+    writer.write_all(&[cipher_suite as u8]).map_err(io_err)?;
+    writer.write_all(&CURRENT_TOOL_VERSION).map_err(io_err)?;
+    Ok(())
+}
+
+// Read and validate the common header from the reader.
+pub fn read_file_header(reader: &mut impl Read) -> Result<FileHeader, CryptError> {
+    let mut magic = [0u8; 4];
+    reader.read_exact(&mut magic).map_err(io_err)?;
+    if &magic != MAGIC_BYTES {
+        return Err(CryptError::InvalidHeader(format!(
+            "Invalid magic bytes: expected {:?}, found {:?}",
+            MAGIC_BYTES, magic
+        )));
+    }
+
+    let mut ver_buf = [0u8; 1];
+    reader.read_exact(&mut ver_buf).map_err(io_err)?;
+    let format_version = ver_buf[0];
+    if format_version != CURRENT_FORMAT_VERSION {
+        return Err(CryptError::InvalidHeader(format!(
+            "Unsupported format version {format_version} (supported version: {CURRENT_FORMAT_VERSION})"
+        )));
+    }
+
+    let mut mode_buf = [0u8; 1];
+    reader.read_exact(&mut mode_buf).map_err(io_err)?;
+    let mode = EncryptionMode::from_u8(mode_buf[0]).ok_or_else(|| {
+        CryptError::InvalidHeader(format!("Unknown encryption mode: {}", mode_buf[0]))
+    })?;
+
+    let mut cipher_buf = [0u8; 1];
+    reader.read_exact(&mut cipher_buf).map_err(io_err)?;
+    let cipher_suite = CipherSuite::from_u8(cipher_buf[0]).ok_or_else(|| {
+        CryptError::InvalidHeader(format!("Unknown cipher suite: {}", cipher_buf[0]))
+    })?;
+
+    let mut tool_version = [0u8; 3];
+    reader.read_exact(&mut tool_version).map_err(io_err)?;
+
+    Ok(FileHeader {
+        format_version,
+        mode,
+        cipher_suite,
+        tool_version,
+    })
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 // Lift an I/O error into a [`CryptError`].
 #[inline]
 fn io_err(e: io::Error) -> CryptError {
@@ -176,6 +304,11 @@ fn stream_decrypt(
 //
 // On-disk layout
 // ┌────────────────────────────────────────────────────────────┐
+// │  Magic bytes      ( 4 B)  b"TFMR"                          │
+// │  Format version   ( 1 B)  0x01                             │
+// │  Mode             ( 1 B)  0x01 (Keystore)                  │
+// │  Cipher suite     ( 1 B)  0x01 (AES-256-GCM)               │
+// │  Tool version     ( 3 B)  [major, minor, patch]            │
 // │  DEK nonce        (12 B)                                   │
 // │  Wrapped-DEK len  ( 4 B, little-endian u32)                │
 // │  Wrapped DEK      (variable)                               │
@@ -223,6 +356,7 @@ pub fn encrypt_file_wks(
     rand::fill(&mut base_nonce);
 
     // Write header
+    write_header(writer, EncryptionMode::Keystore, CipherSuite::Aes256Gcm)?;
     writer.write_all(&dek_nonce_bytes).map_err(io_err)?;
     writer
         .write_all(&(wrapped_dek.len() as u32).to_le_bytes())
@@ -258,6 +392,21 @@ pub fn decrypt_file_wks(
     reader: &mut impl Read,
     writer: &mut impl Write,
 ) -> Result<String, CryptError> {
+    // ── Header validation ────────────────────────────────────────────────────
+    let header = read_file_header(reader)?;
+    if header.mode != EncryptionMode::Keystore {
+        return Err(CryptError::InvalidHeader(format!(
+            "Expected keystore encryption mode, but found {:?}",
+            header.mode
+        )));
+    }
+    if header.cipher_suite != CipherSuite::Aes256Gcm {
+        return Err(CryptError::InvalidHeader(format!(
+            "Unsupported cipher suite: {:?}",
+            header.cipher_suite
+        )));
+    }
+
     // ── KEK cipher ───────────────────────────────────────────────────────────
     let kek = Key::<Aes256Gcm>::try_from(master_key.as_slice()).map_err(|e| {
         CryptError::AesGcmError(
@@ -267,7 +416,7 @@ pub fn decrypt_file_wks(
     })?;
     let master_cipher = Aes256Gcm::new(&kek);
 
-    // ── Read and parse header ─────────────────────────────────────────────────
+    // ── Read and parse payload header ─────────────────────────────────────────
     let mut dek_nonce_bytes = [0u8; 12];
     reader.read_exact(&mut dek_nonce_bytes).map_err(io_err)?;
 
@@ -304,7 +453,7 @@ pub fn decrypt_file_wks(
     stream_decrypt(&file_cipher, &base_nonce, reader, writer)
 }
 
-// password-based encrypt / decrypt
+// ─── password-based encrypt / decrypt ────────────────────────────────────────
 
 // Derive a KEK from `password` and a base64-encoded `salt_str` via Argon2.
 fn derive_kek_from_pwd(password: &str, salt_str: &str) -> Result<[u8; 32], CryptError> {
@@ -333,6 +482,11 @@ fn derive_kek_from_pwd(password: &str, salt_str: &str) -> Result<[u8; 32], Crypt
 //
 // On-disk layout
 // ┌────────────────────────────────────────────────────────────┐
+// │  Magic bytes      ( 4 B)  b"TFMR"                          │
+// │  Format version   ( 1 B)  0x01                             │
+// │  Mode             ( 1 B)  0x02 (Password)                  │
+// │  Cipher suite     ( 1 B)  0x01 (AES-256-GCM)               │
+// │  Tool version     ( 3 B)  [major, minor, patch]            │
 // │  Salt             (16 B)                                   │
 // │  DEK nonce        (12 B)                                   │
 // │  Wrapped-DEK len  ( 4 B, little-endian u32)                │
@@ -386,6 +540,7 @@ pub fn encrypt_file_with_pwd(
     rand::fill(&mut base_nonce);
 
     // Write header
+    write_header(writer, EncryptionMode::Password, CipherSuite::Aes256Gcm)?;
     writer.write_all(&salt_bytes).map_err(io_err)?; // 16 B raw salt
     writer.write_all(&dek_nonce_bytes).map_err(io_err)?;
     writer
@@ -425,6 +580,21 @@ pub fn decrypt_file_with_pwd(
     reader: &mut impl Read,
     writer: &mut impl Write,
 ) -> Result<String, CryptError> {
+    // ── Header validation ────────────────────────────────────────────────────
+    let header = read_file_header(reader)?;
+    if header.mode != EncryptionMode::Password {
+        return Err(CryptError::InvalidHeader(format!(
+            "Expected password encryption mode, but found {:?}",
+            header.mode
+        )));
+    }
+    if header.cipher_suite != CipherSuite::Aes256Gcm {
+        return Err(CryptError::InvalidHeader(format!(
+            "Unsupported cipher suite: {:?}",
+            header.cipher_suite
+        )));
+    }
+
     // Read salt and re-derive KEK
     let mut salt_bytes = [0u8; 16];
     reader.read_exact(&mut salt_bytes).map_err(io_err)?;
@@ -478,4 +648,141 @@ pub fn decrypt_file_with_pwd(
     let file_cipher = Aes256Gcm::new(&file_key);
 
     stream_decrypt(&file_cipher, &base_nonce, reader, writer)
+}
+
+// ─── Tests ───────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_password_encrypt_decrypt_roundtrip() {
+        let password = "SuperSecretPassword123!";
+        let original_filename = "document.txt";
+        let original_data = b"Hello world! This is confidential data being encrypted with headers.";
+
+        let mut encrypted = Vec::new();
+        encrypt_file_with_pwd(
+            password,
+            original_filename,
+            &mut Cursor::new(original_data),
+            &mut encrypted,
+            16, // small chunk size to test multi-chunk streaming
+        )
+        .expect("encryption failed");
+
+        // Verify header inspectability
+        let mut enc_cursor = Cursor::new(&encrypted);
+        let header = read_file_header(&mut enc_cursor).expect("failed to read header");
+        assert_eq!(header.format_version, CURRENT_FORMAT_VERSION);
+        assert_eq!(header.mode, EncryptionMode::Password);
+        assert_eq!(header.cipher_suite, CipherSuite::Aes256Gcm);
+        assert_eq!(header.tool_version, CURRENT_TOOL_VERSION);
+
+        // Decrypt
+        let mut decrypted = Vec::new();
+        let mut enc_reader = Cursor::new(&encrypted);
+        let recovered_filename =
+            decrypt_file_with_pwd(password, &mut enc_reader, &mut decrypted)
+                .expect("decryption failed");
+
+        assert_eq!(recovered_filename, original_filename);
+        assert_eq!(decrypted, original_data);
+    }
+
+    #[test]
+    fn test_keystore_encrypt_decrypt_roundtrip() {
+        let master_key = [42u8; 32];
+        let original_filename = "archive.tar";
+        let original_data = b"Some binary contents to encrypt with keystore key.";
+
+        let mut encrypted = Vec::new();
+        encrypt_file_wks(
+            &master_key,
+            original_filename,
+            &mut Cursor::new(original_data),
+            &mut encrypted,
+            32,
+        )
+        .expect("keystore encryption failed");
+
+        // Verify header
+        let mut enc_cursor = Cursor::new(&encrypted);
+        let header = read_file_header(&mut enc_cursor).expect("failed to read header");
+        assert_eq!(header.format_version, CURRENT_FORMAT_VERSION);
+        assert_eq!(header.mode, EncryptionMode::Keystore);
+        assert_eq!(header.cipher_suite, CipherSuite::Aes256Gcm);
+
+        // Decrypt
+        let mut decrypted = Vec::new();
+        let mut enc_reader = Cursor::new(&encrypted);
+        let recovered_filename =
+            decrypt_file_wks(&master_key, &mut enc_reader, &mut decrypted)
+                .expect("keystore decryption failed");
+
+        assert_eq!(recovered_filename, original_filename);
+        assert_eq!(decrypted, original_data);
+    }
+
+    #[test]
+    fn test_invalid_magic_bytes_rejected() {
+        let mut corrupt_data = vec![b'X', b'X', b'X', b'X'];
+        corrupt_data.extend_from_slice(&[1, 1, 1, 0, 1, 0]);
+
+        let result = read_file_header(&mut Cursor::new(corrupt_data));
+        assert!(result.is_err());
+        match result {
+            Err(CryptError::InvalidHeader(msg)) => {
+                assert!(msg.contains("Invalid magic bytes"));
+            }
+            other => panic!("Expected CryptError::InvalidHeader, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_unsupported_format_version_rejected() {
+        let mut invalid_version = Vec::new();
+        invalid_version.extend_from_slice(MAGIC_BYTES);
+        invalid_version.push(99); // Unsupported format version 99
+        invalid_version.extend_from_slice(&[1, 1, 0, 1, 0]);
+
+        let result = read_file_header(&mut Cursor::new(invalid_version));
+        assert!(result.is_err());
+        match result {
+            Err(CryptError::InvalidHeader(msg)) => {
+                assert!(msg.contains("Unsupported format version 99"));
+            }
+            other => panic!("Expected CryptError::InvalidHeader, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_mode_mismatch_rejected() {
+        let master_key = [7u8; 32];
+        let original_data = b"secret data";
+
+        let mut encrypted = Vec::new();
+        encrypt_file_wks(
+            &master_key,
+            "test.txt",
+            &mut Cursor::new(original_data),
+            &mut encrypted,
+            64,
+        )
+        .unwrap();
+
+        // Attempting to decrypt keystore-encrypted file with password decryptor
+        let mut enc_reader = Cursor::new(&encrypted);
+        let mut out = Vec::new();
+        let result = decrypt_file_with_pwd("password", &mut enc_reader, &mut out);
+        assert!(result.is_err());
+        match result {
+            Err(CryptError::InvalidHeader(msg)) => {
+                assert!(msg.contains("Expected password encryption mode"));
+            }
+            other => panic!("Expected CryptError::InvalidHeader, got {:?}", other),
+        }
+    }
 }

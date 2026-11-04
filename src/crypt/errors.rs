@@ -16,4 +16,7 @@ pub enum CryptError {
 
     #[error("Error: {0}, AesGcm Error -> {1}")]
     AesGcmError(String, String),
+
+    #[error("Invalid Header: {0}")]
+    InvalidHeader(String),
 }
