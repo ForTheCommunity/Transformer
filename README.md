@@ -22,6 +22,7 @@ A command-line utility for transforming files from one form to another.
 * **Performance Optimization**:
   * Configurable chunk/buffer sizes ranging from 1 MB up to 100 MB to optimize processing speed for large files.
 * **Robust Security Architecture**:
+  * **File Header & Format Validation**: Embeds a 10-byte metadata header (`TFMR`) detailing format version, encryption mode, cipher suite, and tool version to prevent corrupted decryption and mode mismatch errors.
   * **Secure Interactive Prompts**: Built-in prompts avoid command-line arguments to prevent sensitive passwords from being exposed in shell history.
   * **Argon2 Key Derivation (KDF)**: Protects user passwords against brute-force attacks using a 16-byte cryptographically secure random salt.
   * **AES-256-GCM Encryption (AEAD)**: Ensures complete data confidentiality and integrity validation for both key-wrapping and stream blocks.
@@ -236,10 +237,27 @@ Transformer uses state-of-the-art cryptographic primitives to guarantee both dat
 ### 5. Secure Filename Preservation
 * The original file name is embedded securely at the very beginning of the plaintext stream (`[filename_len (4 B LE)] ++ [filename bytes]`) before chunk encryption. During decryption, Transformer automatically extracts this header to restore the original filename seamlessly.
 
-### 6. On-Disk File Layout:
+### 6. Standardized File Header (10 Bytes)
+Every encrypted file begins with a fixed 10-byte common header to validate format compatibility and verify encryption parameters before attempting decryption:
+
+| Field | Size | Description |
+| :--- | :--- | :--- |
+| **Magic Bytes** | 4 B | Fixed sequence `b"TFMR"` to identify Transformer-encrypted files. |
+| **Format Version** | 1 B | File format version (currently `0x01`). |
+| **Mode** | 1 B | Encryption mode: `0x01` (`Keystore`) or `0x02` (`Password`). |
+| **Cipher Suite** | 1 B | Cryptographic suite: `0x01` (`AES-256-GCM`). |
+| **Tool Version** | 3 B | Semantic version `[major, minor, patch]` of the tool used to encrypt. |
+
+### 7. On-Disk File Layout:
 * i. Password-Based Encryption Layout (Self-Contained) :
   ```text
   ┌────────────────────────────────────────────────────────────┐
+  │  Magic Bytes      ( 4 B, b"TFMR")                          │
+  │  Format Version   ( 1 B, 0x01)                             │
+  │  Mode             ( 1 B, 0x02 = Password)                  │
+  │  Cipher Suite     ( 1 B, 0x01 = AES-256-GCM)               │
+  │  Tool Version     ( 3 B, [major, minor, patch])            │
+  ├────────────────────────────────────────────────────────────┤
   │  Salt             (16 B, Argon2 salt)                      │
   │  DEK nonce        (12 B)                                   │
   │  Wrapped-DEK len  ( 4 B, little-endian u32)                │
@@ -256,8 +274,14 @@ Transformer uses state-of-the-art cryptographic primitives to guarantee both dat
   └────────────────────────────────────────────────────────────┘
   ```
 * ii. Keystore-Based Encryption Layout :
-```text
+  ```text
   ┌────────────────────────────────────────────────────────────┐
+  │  Magic Bytes      ( 4 B, b"TFMR")                          │
+  │  Format Version   ( 1 B, 0x01)                             │
+  │  Mode             ( 1 B, 0x01 = Keystore)                  │
+  │  Cipher Suite     ( 1 B, 0x01 = AES-256-GCM)               │
+  │  Tool Version     ( 3 B, [major, minor, patch])            │
+  ├────────────────────────────────────────────────────────────┤
   │  DEK nonce        (12 B)                                   │
   │  Wrapped-DEK len  ( 4 B, little-endian u32)                │
   │  Wrapped DEK      (variable length)                        │
@@ -271,7 +295,7 @@ Transformer uses state-of-the-art cryptographic primitives to guarantee both dat
   ├────────────────────────────────────────────────────────────┤
   │  EOS sentinel     ( 4 B, all zero)                         │
   └────────────────────────────────────────────────────────────┘
-```
+  ```
 
 
 ---
