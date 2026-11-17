@@ -181,15 +181,9 @@ fn chunk_nonce(base_nonce: &[u8; 12], counter: u64) -> [u8; 12] {
 
 /// Sanitizes a filename from the encrypted header to prevent Directory Traversal attacks.
 pub fn sanitize_filename(raw_name: &str) -> Result<String, CryptError> {
-    let path = std::path::Path::new(raw_name);
-    let base_name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .filter(|s| !s.is_empty() && *s != "." && *s != "..")
-        .ok_or_else(|| {
-            CryptError::InvalidHeader("Invalid or unsafe filename in header".to_string())
-        })?;
-    Ok(base_name.to_string())
+    crate::util::sanitize_filename(raw_name).ok_or_else(|| {
+        CryptError::InvalidHeader("Invalid or unsafe filename in header".to_string())
+    })
 }
 
 // Encrypt all bytes from `input` into `writer` in `chunk_size`-byte blocks.

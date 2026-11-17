@@ -6,9 +6,17 @@ use std::{
 use anyhow::{Result, anyhow};
 use indicatif::{ProgressBar, ProgressStyle};
 use rpassword::ConfigBuilder;
-use transformer::crypt::{
-    decrypt_file_ks, decrypt_file_wp, encrypt_file_ks, encrypt_file_wp, keystore::create_keystore,
-    zeroize::Zeroize,
+use transformer::{
+    crypt::{
+        decrypt_file_ks, decrypt_file_wp, encrypt_file_ks, encrypt_file_wp,
+        keystore::create_keystore, zeroize::Zeroize,
+    },
+    parse_to_bytes,
+    preety_print,
+    split_merge::{
+        MergeProgress, SplitProgress, calculate_split_layout, inspect_piece, merge_pieces,
+        split_file,
+    },
 };
 
 fn password_config() -> rpassword::Config {
@@ -231,6 +239,85 @@ pub fn dfwkp_bin_helper(
     );
 
     println!("{msg}");
+
+    Ok(())
+}
+
+/// CLI wrapper with progress reporting.
+pub fn split_bin_helper(file_path: &Path, piece_size_str: &str, output_dir: &Path) -> Result<()> {
+    let piece_size = parse_to_bytes(piece_size_str)?;
+    let metadata = fs::metadata(file_path)?;
+    if metadata.is_dir() {
+        return Err(anyhow!("Expected a file path, not a directory"));
+    }
+    let file_size = metadata.len();
+    let file_name = file_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow!("Invalid filename: unable to extract valid UTF-8 filename"))?;
+    let (header_len, payload_per_piece, total_pieces) =
+        calculate_split_layout(file_name, file_size, piece_size)?;
+
+    preety_print!("File Size in Bytes", file_size);
+    preety_print!("Max Piece Size in Bytes", piece_size);
+    preety_print!("Piece Header Size", header_len);
+    preety_print!("Payload Bytes per Piece", payload_per_piece);
+    preety_print!("Total Estimated Pieces", total_pieces);
+
+    let hash_pb = make_progress_bar(file_size, "Hashing  ");
+    let mut split_pb: Option<ProgressBar> = None;
+
+    let res = split_file(file_path, piece_size, output_dir, |progress| match progress {
+        SplitProgress::Hashing { bytes_read, .. } => {
+            hash_pb.inc(bytes_read);
+        }
+        SplitProgress::Splitting { bytes_written, .. } => {
+            let pb = split_pb.get_or_insert_with(|| {
+                hash_pb.finish_and_clear();
+                make_progress_bar(file_size, "Splitting")
+            });
+            pb.inc(bytes_written);
+        }
+    })?;
+
+    hash_pb.finish_and_clear();
+    if let Some(pb) = split_pb {
+        pb.finish_and_clear();
+    }
+
+    let hash_hex: String = res.original_file_hash.iter().map(|b| format!("{:02x}", b)).collect();
+    println!(
+        "   ✓  Split '{}' into {} pieces (BLAKE3: {})",
+        res.original_filename, res.total_pieces, hash_hex
+    );
+
+    Ok(())
+}
+
+/// CLI wrapper with progress reporting.
+pub fn merge_bin_helper(piece_path: &Path, output_dir: &Path) -> Result<()> {
+    let header = inspect_piece(piece_path)?;
+    preety_print!("Original File", header.original_filename);
+    preety_print!("Total Pieces", header.total_pieces);
+
+    let pb = make_progress_bar(header.original_file_size, "Merging  ");
+    let pb_clone = pb.clone();
+
+    let res = merge_pieces(piece_path, output_dir, move |progress| match progress {
+        MergeProgress::Merging { bytes_written, .. } => {
+            pb_clone.inc(bytes_written);
+        }
+    })?;
+
+    pb.finish_and_clear();
+
+    let hash_hex: String = res.file_hash.iter().map(|b| format!("{:02x}", b)).collect();
+    println!(
+        "   ✓  Merged {} pieces -> '{}' (BLAKE3 verified: {})",
+        res.total_pieces,
+        res.output_path.display(),
+        hash_hex
+    );
 
     Ok(())
 }

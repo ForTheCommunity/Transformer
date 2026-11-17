@@ -1,13 +1,12 @@
 use clap::{CommandFactory, Parser};
-use transformer::{
-    cli::{Cli, Commands},
-    merge::merge,
-    preety_print,
-    split::split_file,
-};
+use transformer::preety_print;
 
-use crate::bin_helper::{
-    create_ks, dfwkp_bin_helper, dfwks_bin_helper, efwkp_bin_helper, efwks_bin_helper,
+use crate::{
+    bin_helper::{
+        create_ks, dfwkp_bin_helper, dfwks_bin_helper, efwkp_bin_helper, efwks_bin_helper,
+        merge_bin_helper, split_bin_helper,
+    },
+    cli::{Cli, Commands},
 };
 
 mod bin_helper;
@@ -22,20 +21,16 @@ fn main() {
             piece_size,
             output,
         }) => {
-            match split_file(file_path, piece_size, output) {
-                Ok(_) => {}
-                Err(e) => {
-                    preety_print!("Error", e);
-                }
-            };
-        }
-
-        Some(Commands::Merge { piece, folder }) => match merge(piece, folder) {
-            Ok(_) => {}
-            Err(e) => {
+            if let Err(e) = split_bin_helper(file_path, piece_size, output) {
                 preety_print!("Error", e);
             }
-        },
+        }
+
+        Some(Commands::Merge { piece, folder }) => {
+            if let Err(e) = merge_bin_helper(piece, folder) {
+                preety_print!("Error", e);
+            }
+        }
 
         Some(Commands::Encrypt {
             file,

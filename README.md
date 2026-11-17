@@ -13,21 +13,22 @@ A command-line utility for transforming files from one form to another.
 
 ## ❖ Key Features
 
-* **File Splitting & Merging**: 
-  * Break large files into manageable pieces using custom sizes across multiple units (Bytes, KB, MB, GB, and TB).
-  * Reconstruct original files effortlessly from a directory of extracted pieces.
-* **Flexible Encryption Modes**:
-  * **Password-Based Encryption**: Self-contained file encryption and decryption using direct passwords (`encrypt-pass` and `decrypt-pass`) without requiring external files.
-  * **Keystore-Based Management**: Centralized key handling that lets you create a master keystore file protected by a master password to encrypt and decrypt multiple files seamlessly.
-* **Performance Optimization**:
-  * Configurable chunk/buffer sizes ranging from 1 MB up to 100 MB to optimize processing speed for large files.
-* **Robust Security Architecture**:
-  * **File Header & Format Validation**: Embeds a 10-byte metadata header (`TFMR`) detailing format version, encryption mode, cipher suite, and tool version to prevent corrupted decryption and mode mismatch errors.
-  * **Secure Interactive Prompts**: Built-in prompts avoid command-line arguments to prevent sensitive passwords from being exposed in shell history.
-  * **Argon2 Key Derivation (KDF)**: Protects user passwords against brute-force attacks using a 16-byte cryptographically secure random salt.
-  * **AES-256-GCM Encryption (AEAD)**: Ensures complete data confidentiality and integrity validation for both key-wrapping and stream blocks.
-  * **Unique Chunk Nonces**: Defends against stream vulnerabilities by mixing a base nonce with an incremental block counter for every chunk.
-  * **Seamless Filename Preservation**: Automatically embeds and restores original filenames directly within the encrypted stream.
+* **Split Big Files into Smaller Pieces**:
+  * Break large files (like videos, backups, or archives) into smaller parts that never go over the maximum size you choose (in Bytes, KB, MB, GB, or TB)—great for fitting under upload or email limits.
+* **Combine Pieces Back Together Safely**:
+  * Rebuild your original file in one step, even if the pieces were renamed or mixed into a folder with other unrelated files.
+  * **Automatic Safety Checks**: Before rebuilding your file, Transformer checks that all pieces are present and undamaged—and tells you right away if a piece is missing or corrupted, instead of giving you a broken file.
+* **Two Easy Ways to Lock (Encrypt) Your Files**:
+  * **Password Mode**: Lock and unlock any file using just a password—no extra files required.
+  * **Keystore Mode**: Create one private "master key" file protected by a single master password, then use it to lock and unlock many files effortlessly.
+* **Built-In Privacy & Protection**:
+  * **Hides Original File Names**: Encrypted files are saved with random names so no one can guess what's inside by looking at the filename. When you unlock the file, its original name is automatically restored.
+  * **Protects Your Passwords**: Prompts you to type passwords privately so they aren't saved in your terminal history, and clears secret keys from memory as soon as the work is finished.
+  * **Detects Tampering**: Immediately catches modified or damaged encrypted files instead of outputting broken data.
+* **Fast & Smooth on Large Files**:
+  * Shows live progress bars while working, lets you tune buffer speed for large files, and includes an option to automatically clean up source files after encrypting or decrypting.
+* **Developer-Friendly**:
+  * Built as a reusable library (lib crate) too, so other developers can easily add Transformer's splitting, merging, and encryption features into their own softwares.
 
 ## ❖ Download & Installation
 
@@ -44,11 +45,13 @@ appman install transformer
 ## ❖ Usage
 
 ## ✦ Splitting a File
-Use the `split` subcommand to break a file into smaller pieces.
+Use the `split` subcommand to break a file into self-describing, BLAKE3-verified pieces.
 
 ```bash
 transformer split --file-path <PATH> --piece-size <SIZE> --output <DIRECTORY>
 ```
+
+> **Note:** `--piece-size` sets the **maximum total on-disk size** per piece (`header + payload <= piece_size`). For example, splitting a 5 MB file with `-p 1MB` caps every piece at `1 MB` on disk and produces 6 pieces (5 full `1 MB` pieces plus 1 small remainder piece). `--piece-size` must be larger than the piece header size (`114 + filename_len` bytes).
 
 **Example:**
 ```bash
@@ -56,8 +59,8 @@ transformer split -f large_video.mp4 -p 100MB -o ./fragments
 ```
 
 ## ✦ Merging Pieces
-Use the `merge` subcommand to reconstruct the original file from a directory of pieces.
-> **Note:** All pieces must be in the same folder/directory.
+Use the `merge` subcommand to reconstruct and verify the original file from a directory of pieces.
+> **Note:** All pieces must be in the same folder/directory. Pieces are matched by their embedded `TFSP` header and `split_id` (not by filename), verified per-piece and end-to-end with **BLAKE3**, and written atomically.
 
 ```bash
 transformer merge --piece <Any Piece> --folder <FOLDER_PATH>
@@ -65,7 +68,7 @@ transformer merge --piece <Any Piece> --folder <FOLDER_PATH>
 
 **Example:**
 ```bash
-transformer merge -p ~/Downloads/pieces/piece_000 -f ~/Downloads/
+transformer merge -p ~/Downloads/pieces/large_video.mp4_piece_0 -f ~/Downloads/
 ```
 
 ## ✦ Supported Units
@@ -79,6 +82,10 @@ The `--piece-size` (`-p`) flag supports the following case-insensitive units:
 | `MB` | Megabytes |
 | `GB` | Gigabytes |
 | `TB` | Terabytes |
+
+---
+
+
 
 
 ## ❖ Encrypting/Decrypting Files
@@ -234,11 +241,12 @@ Transformer uses state-of-the-art cryptographic primitives to guarantee both dat
 * **Chunked Stream Processing**: Files are read, encrypted, and written in adjustable chunks (`chunk_size`, ranging from 1 MB up to 100 MB for maximum throughput).
 * **Unique Nonce Derivation**: To prevent nonce reuse vulnerabilities in AES-GCM across large streams, Transformer generates a random 12-byte `base_nonce` for each file and derives a unique nonce per chunk (`chunk_nonce`). It combines bytes 0–3 of the base nonce with an 8-byte little-endian chunk counter XOR-ed into bytes 4–11.
 
-### 5. Secure Filename Preservation
-* The original file name is embedded securely at the very beginning of the plaintext stream (`[filename_len (4 B LE)] ++ [filename bytes]`) before chunk encryption. During decryption, Transformer automatically extracts this header to restore the original filename seamlessly.
+### 5. Secure Filename Preservation & Memory Zeroization
+* The original file name is embedded securely at the very beginning of the plaintext stream (`[filename_len (4 B LE)] ++ [filename bytes]`) before chunk encryption. During decryption, Transformer extracts and sanitizes the leaf filename to prevent path-traversal attacks.
+* Sensitive key material (Master Keys, KEKs, DEKs, and passwords) is wiped from memory on drop using volatile zeroization.
 
-### 6. Standardized File Header (10 Bytes)
-Every encrypted file begins with a fixed 10-byte common header to validate format compatibility and verify encryption parameters before attempting decryption:
+### 6. Standardized File Header (10 Bytes, Authenticated via AAD)
+Every encrypted file begins with a fixed 10-byte common header passed as AES-GCM Associated Authenticated Data (AAD) when wrapping the DEK (alongside the 16-byte salt in Password mode) to prevent tampering and mode mismatch errors:
 
 | Field | Size | Description |
 | :--- | :--- | :--- |
@@ -248,7 +256,7 @@ Every encrypted file begins with a fixed 10-byte common header to validate forma
 | **Cipher Suite** | 1 B | Cryptographic suite: `0x01` (`AES-256-GCM`). |
 | **Tool Version** | 3 B | Semantic version `[major, minor, patch]` of the tool used to encrypt. |
 
-### 7. On-Disk File Layout:
+### 7. On-Disk Encrypted File Layout:
 * i. Password-Based Encryption Layout (Self-Contained) :
   ```text
   ┌────────────────────────────────────────────────────────────┐
@@ -296,6 +304,30 @@ Every encrypted file begins with a fixed 10-byte common header to validate forma
   │  EOS sentinel     ( 4 B, all zero)                         │
   └────────────────────────────────────────────────────────────┘
   ```
+
+---
+
+# ❖ Split Piece Format & Integrity (`TFSP`)
+
+Every split piece is self-describing and capped at `<= piece_size` bytes on disk (`header + payload <= piece_size`). During `merge`, Transformer discovers pieces by `TFSP` magic and `split_id`, verifies completeness (`0..total_pieces`), validates each piece's **BLAKE3** payload hash, and verifies the final reconstructed file's **BLAKE3** hash before writing atomically.
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  Magic Bytes         ( 4 B, b"TFSP")                        │
+│  Format Version      ( 1 B, 0x01)                           │
+│  Tool Version        ( 3 B, [major, minor, patch])          │
+│  Split ID            (16 B, random 128-bit group ID)        │
+│  Piece Index         ( 8 B, LE u64, 0-based)                │
+│  Total Pieces        ( 8 B, LE u64)                         │
+│  Original File Size  ( 8 B, LE u64)                         │
+│  Original File Hash  (32 B, BLAKE3 digest of full file)     │
+│  Piece Payload Hash  (32 B, BLAKE3 digest of this piece)    │
+│  Filename Len        ( 2 B, LE u16, 1..=4096)               │
+│  Original Filename   ( N B, UTF-8 basename)                 │
+├─────────────────────────────────────────────────────────────┤
+│  Piece Payload Data  (<= piece_size - header_len bytes)     │
+└─────────────────────────────────────────────────────────────┘
+```
 
 
 ---

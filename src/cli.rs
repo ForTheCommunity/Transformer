@@ -15,22 +15,22 @@ pub enum Commands {
     Split {
         /// Path of file to split.
         #[arg(short = 'f', long)]
-        file_path: String,
+        file_path: PathBuf,
         /// Size of Piece. eg. 4B, 5KB, 6MB etc.
         #[arg(short = 'p', long)]
         piece_size: String,
         /// Output Dir.
         #[arg(short = 'o', long)]
-        output: String,
+        output: PathBuf,
     },
     /// Merge Pieces to a file.
     Merge {
         /// Select a Piece, all pieces of a file should be inside same directory.
         #[arg(short = 'p', long)]
-        piece: String,
+        piece: PathBuf,
         /// Output Folder Path, eg. ~/Downloads
         #[arg(short = 'f', long)]
-        folder: String,
+        folder: PathBuf,
     },
     /// Encrypt file
     Encrypt {

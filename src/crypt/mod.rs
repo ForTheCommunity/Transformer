@@ -11,38 +11,10 @@ use std::{
 
 use anyhow::{Result, anyhow};
 
-use crate::crypt::{
-    keystore::verify_ks_master_password,
-    zeroize::Zeroize,
+use crate::{
+    crypt::{keystore::verify_ks_master_password, zeroize::Zeroize},
+    util::{TempFileGuard, random_hex_id},
 };
-
-/// RAII Guard that ensures temporary files are deleted if an operation does not complete successfully.
-pub(crate) struct TempFileGuard {
-    path: PathBuf,
-    active: bool,
-}
-
-impl TempFileGuard {
-    pub(crate) fn new(path: PathBuf) -> Self {
-        Self { path, active: true }
-    }
-
-    pub(crate) fn disarm(&mut self) {
-        self.active = false;
-    }
-
-    pub(crate) fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempFileGuard {
-    fn drop(&mut self) {
-        if self.active {
-            let _ = fs::remove_file(&self.path);
-        }
-    }
-}
 
 struct CallbackReader<R, F> {
     inner: R,
@@ -80,9 +52,7 @@ where
     ks_master_password.zeroize();
 
     // Generate a random anonymous filename (e.g., "7f3b9a1c.encrypted") to prevent metadata leakage
-    let mut random_bytes = [0u8; 8];
-    rand::fill(&mut random_bytes);
-    let random_id: String = random_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+    let random_id = random_hex_id();
     let output_filename = format!("{}.encrypted", random_id);
     let tmp_filename = format!("{}.enc.tmp", random_id);
     let output_path = output.join(&output_filename);
@@ -131,9 +101,7 @@ where
         callback: &mut on_progress,
     };
 
-    let mut rng_bytes = [0u8; 8];
-    rand::fill(&mut rng_bytes);
-    let tmp_name: String = rng_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+    let tmp_name = random_hex_id();
 
     // The original filename is only known after decryption. We always decrypt to a
     // temporary file first to guarantee atomic writes and avoid leaving corrupted files on failure.
@@ -186,9 +154,7 @@ where
         .ok_or_else(|| anyhow!("Filename is not valid UTF-8"))?;
 
     // Generate a random anonymous filename (e.g., "7f3b9a1c.encrypted") to prevent metadata leakage
-    let mut random_bytes = [0u8; 8];
-    rand::fill(&mut random_bytes);
-    let random_id: String = random_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+    let random_id = random_hex_id();
     let output_filename = format!("{}.encrypted", random_id);
     let tmp_filename = format!("{}.enc.tmp", random_id);
     let output_path = output.join(&output_filename);
@@ -234,9 +200,7 @@ where
         callback: &mut on_progress,
     };
 
-    let mut rng_bytes = [0u8; 8];
-    rand::fill(&mut rng_bytes);
-    let tmp_name: String = rng_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+    let tmp_name = random_hex_id();
 
     let tmp_path = if output.is_dir() {
         output.join(format!("{}.dec.tmp", tmp_name))
