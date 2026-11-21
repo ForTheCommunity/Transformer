@@ -4,54 +4,229 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  build-and-release:
-    runs-on: windows-latest
-    permissions:
-      contents: write
-      
+  build:
+    name: Build ${{ matrix.name }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: target/x86_64-pc-windows-msvc/release/transformer.exe
+            asset: transformer-windows-x86_64.exe
+
+          # macOS
+          - name: macOS Apple Silicon
+            os: macos-latest
+            target: aarch64-apple-darwin
+            binary: target/aarch64-apple-darwin/release/transformer
+            asset: transformer-macos-aarch64
+
+          - name: macOS Intel
+            os: macos-latest
+            target: x86_64-apple-darwin
+            binary: target/x86_64-apple-darwin/release/transformer
+            asset: transformer-macos-x86_64
+
+          # Linux x86_64
+          - name: Linux x86_64 GNU
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: target/x86_64-unknown-linux-gnu/release/transformer
+            asset: transformer-linux-x86_64-gnu
+
+          - name: Linux x86_64 MUSL
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            binary: target/x86_64-unknown-linux-musl/release/transformer
+            asset: transformer-linux-x86_64-musl
+
+          # Linux ARM64
+          - name: Linux ARM64 GNU
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: target/aarch64-unknown-linux-gnu/release/transformer
+            asset: transformer-linux-aarch64-gnu
+
+          - name: Linux ARM64 MUSL
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            binary: target/aarch64-unknown-linux-musl/release/transformer
+            asset: transformer-linux-aarch64-musl
+
+          # Linux ARMv7 (32-bit Raspberry Pi / SBCs)
+          - name: Linux ARMv7 GNU
+            os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            binary: target/armv7-unknown-linux-gnueabihf/release/transformer
+            asset: transformer-linux-armv7-gnueabihf
+            use_cross: true
+
+          - name: Linux ARMv7 MUSL
+            os: ubuntu-latest
+            target: armv7-unknown-linux-musleabihf
+            binary: target/armv7-unknown-linux-musleabihf/release/transformer
+            asset: transformer-linux-armv7-musleabihf
+            use_cross: true
+
+          # Linux 32-bit x86 (i686)
+          - name: Linux i686 GNU
+            os: ubuntu-latest
+            target: i686-unknown-linux-gnu
+            binary: target/i686-unknown-linux-gnu/release/transformer
+            asset: transformer-linux-i686-gnu
+            use_cross: true
+
+          - name: Linux i686 MUSL
+            os: ubuntu-latest
+            target: i686-unknown-linux-musl
+            binary: target/i686-unknown-linux-musl/release/transformer
+            asset: transformer-linux-i686-musl
+            use_cross: true
+
+          # Linux RISC-V 64-bit
+          - name: Linux RISC-V 64 GNU
+            os: ubuntu-latest
+            target: riscv64gc-unknown-linux-gnu
+            binary: target/riscv64gc-unknown-linux-gnu/release/transformer
+            asset: transformer-linux-riscv64-gnu
+            use_cross: true
+
+    runs-on: ${{ matrix.os }}
+
     steps:
-      - name: Checkout This Repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust Toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          targets: x86_64-pc-windows-msvc
+          targets: ${{ matrix.target }}
 
-    
-      - name: Build for Windows
+      # Required for native host MUSL builds
+      - name: Install MUSL tools
+        if: (!matrix.use_cross) && contains(matrix.target, 'musl')
         run: |
-          cargo build --release --target x86_64-pc-windows-msvc
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
 
-    
-      - name: Package Artifact
-        shell: pwsh
+      - name: Install cross
+        if: matrix.use_cross
+        uses: taiki-e/install-action@cross
+
+      - name: Build
+        shell: bash
         run: |
-          # Create distribution directory
-          New-Item -Path "dist" -ItemType Directory -Force
-          
-          # Copy the .exe files
-          Copy-Item "target/x86_64-pc-windows-msvc/release/*.exe" -Destination "dist/"
-          
-          # Generate SHA256 checksums for all .exe files in the dist folder
-          Get-ChildItem "dist/*.exe" | ForEach-Object {
-              $hash = Get-FileHash $_.FullName -Algorithm SHA256
-              "$($hash.Hash)  $($_.Name)" | Out-File -FilePath "dist/sha256.txt" -Append -Encoding ascii
-          }
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
 
-    
-      - name: Create Release and Upload Assets
+      - name: Package
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p dist
+
+          cp "${{ matrix.binary }}" "dist/${{ matrix.asset }}"
+
+          (
+            cd dist
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "${{ matrix.asset }}" > "sha256-${{ matrix.target }}.txt"
+            else
+              shasum -a 256 "${{ matrix.asset }}" > "sha256-${{ matrix.target }}.txt"
+            fi
+          )
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/
+
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract Release Notes from CHANGELOG
+        shell: bash
+        run: |
+          touch release_notes.md
+          python3 -c "
+          import re
+
+          tag = '${{ github.ref_name }}'.lstrip('v')
+          try:
+              with open('CHANGELOG.md', 'r') as f:
+                  content = f.read()
+              pattern = rf'## \[{re.escape(tag)}\][^\n]*\n(.*?)(?=\n## \[|\Z)'
+              match = re.search(pattern, content, re.DOTALL)
+              if match:
+                  notes = match.group(1).strip()
+                  with open('release_notes.md', 'w') as out:
+                      out.write(notes + '\n')
+                  print(f'Successfully extracted release notes for v{tag}:\n{notes}')
+              else:
+                  print(f'No matching changelog entry found for v{tag}; will fall back to default notes.')
+          except Exception as e:
+              print(f'Error reading CHANGELOG.md: {e}')
+          "
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare Release Assets
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p release
+
+          echo "Downloaded artifacts:"
+          find artifacts -type f -print
+
+          # Copy all compiled binaries into release/
+          find artifacts -mindepth 2 -maxdepth 2 -type f ! -name "sha256-*.txt" -exec cp {} release/ \;
+
+          # Combine all sha256 checksums into SHA256_CHECKSUMS.txt
+          find artifacts -name "sha256-*.txt" -exec cat {} + | sort -k 2 > release/SHA256_CHECKSUMS.txt
+
+          echo
+          echo "Release assets:"
+          ls -lh release/
+
+          echo
+          echo "SHA256_CHECKSUMS.txt:"
+          cat release/SHA256_CHECKSUMS.txt
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          files: release/*
           name: Release ${{ github.ref_name }}
+          body_path: release_notes.md
+          generate_release_notes: true
           draft: false
           prerelease: false
-          files: |
-            dist/*.exe
-            dist/sha256.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
