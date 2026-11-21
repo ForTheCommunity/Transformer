@@ -11,6 +11,7 @@ use transformer::{
         decrypt_file_ks, decrypt_file_wp, encrypt_file_ks, encrypt_file_wp,
         keystore::create_keystore, zeroize::Zeroize,
     },
+    format_bytes,
     parse_to_bytes,
     preety_print,
     split_merge::{
@@ -258,10 +259,10 @@ pub fn split_bin_helper(file_path: &Path, piece_size_str: &str, output_dir: &Pat
     let (header_len, payload_per_piece, total_pieces) =
         calculate_split_layout(file_name, file_size, piece_size)?;
 
-    preety_print!("File Size in Bytes", file_size);
-    preety_print!("Max Piece Size in Bytes", piece_size);
-    preety_print!("Piece Header Size", header_len);
-    preety_print!("Payload Bytes per Piece", payload_per_piece);
+    preety_print!("File Size", format_bytes(file_size));
+    preety_print!("Max Piece Size", format_bytes(piece_size));
+    preety_print!("Piece Header Size", format_bytes(header_len));
+    preety_print!("Payload per Piece", format_bytes(payload_per_piece));
     preety_print!("Total Estimated Pieces", total_pieces);
 
     let hash_pb = make_progress_bar(file_size, "Hashing  ");
@@ -298,6 +299,7 @@ pub fn split_bin_helper(file_path: &Path, piece_size_str: &str, output_dir: &Pat
 pub fn merge_bin_helper(piece_path: &Path, output_dir: &Path) -> Result<()> {
     let header = inspect_piece(piece_path)?;
     preety_print!("Original File", header.original_filename);
+    preety_print!("Original File Size", format_bytes(header.original_file_size));
     preety_print!("Total Pieces", header.total_pieces);
 
     let pb = make_progress_bar(header.original_file_size, "Merging  ");
